@@ -3,160 +3,135 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Wavelite - Chat</title>
+  <title>Wavelite</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div class="container-fluid p-0">
-    <!-- WhatsApp-style Header -->
-    <div class="header d-flex align-items-center justify-content-between p-3">
-      <div class="d-flex align-items-center">
-        <h3 class="mb-0 text-white">Wavelite</h3>
-      </div>
-      <button class="btn btn-link text-white" data-bs-toggle="modal" data-bs-target="#settingsModal">
-        <i class="fas fa-cog"></i>
-      </button>
+  <header class="header py-3 mb-4">
+    <div class="container">
+      <h1 class="text-white mb-0">Wavelite</h1>
     </div>
+  </header>
 
-    <!-- Generate Offer Card -->
-    <div class="card m-3 shadow-sm" id="card-generate-offer">
-      <div class="card-header bg-light">
-        <span>Generate Offer</span>
-      </div>
-      <div class="card-body">
-        <textarea class="form-control mb-2" id="offer-sdp" rows="5" readonly></textarea>
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary flex-grow-1" id="btn-generate-offer">
-            <i class="fas fa-plus"></i> Generate
-          </button>
-          <button class="btn btn-outline-secondary" id="btn-copy-offer">
-            <i class="fas fa-copy"></i> Copy
-          </button>
-          <button class="btn btn-outline-danger" id="btn-clear-offer">
-            <i class="fas fa-trash"></i> Clear
-          </button>
+  <main class="container">
+    <div class="row g-3">
+      <div class="col-md-6">
+        <div class="card" id="card-generate-offer">
+          <div class="card-header"><span>Generate Offer</span></div>
+          <div class="card-body">
+            <textarea class="form-control mb-3" id="offer-sdp" rows="5" readonly></textarea>
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary" id="btn-generate-offer"><i class="fas fa-cogs"></i> Generate</button>
+              <button class="btn btn-secondary" id="btn-copy-offer"><i class="fas fa-copy"></i> Copy</button>
+              <button class="btn btn-outline-secondary" id="btn-clear-offer"><i class="fas fa-trash"></i> Clear</button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Paste Offer Card -->
-    <div class="card m-3 shadow-sm" id="card-paste-offer">
-      <div class="card-header bg-light">
-        <span>Paste Offer</span>
-      </div>
-      <div class="card-body">
-        <textarea class="form-control mb-2" id="pasted-offer" rows="5"></textarea>
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary flex-grow-1" id="btn-paste-offer">
-            <i class="fas fa-paste"></i> Paste
-          </button>
-          <button class="btn btn-outline-danger" id="btn-clear-pasted-offer">
-            <i class="fas fa-trash"></i> Clear
-          </button>
+      <div class="col-md-6">
+        <div class="card" id="card-paste-offer">
+          <div class="card-header"><span>Paste Offer</span></div>
+          <div class="card-body">
+            <textarea class="form-control mb-3" id="pasted-offer" rows="5"></textarea>
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary" id="btn-paste-offer"><i class="fas fa-paste"></i> Paste</button>
+              <button class="btn btn-outline-secondary" id="btn-clear-pasted-offer"><i class="fas fa-trash"></i> Clear</button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Generate Answer Card -->
-    <div class="card m-3 shadow-sm" id="card-generate-answer">
-      <div class="card-header bg-light">
-        <span>Generate Answer</span>
-      </div>
-      <div class="card-body">
-        <textarea class="form-control mb-2" id="answer-sdp" rows="5" readonly></textarea>
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary flex-grow-1" id="btn-generate-answer">
-            <i class="fas fa-plus"></i> Generate
-          </button>
-          <button class="btn btn-outline-secondary" id="btn-copy-answer">
-            <i class="fas fa-copy"></i> Copy
-          </button>
-          <button class="btn btn-outline-danger" id="btn-clear-answer">
-            <i class="fas fa-trash"></i> Clear
-          </button>
+      <div class="col-md-6">
+        <div class="card" id="card-generate-answer">
+          <div class="card-header"><span>Generate Answer</span></div>
+          <div class="card-body">
+            <textarea class="form-control mb-3" id="answer-sdp" rows="5" readonly></textarea>
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary" id="btn-generate-answer"><i class="fas fa-cogs"></i> Generate</button>
+              <button class="btn btn-secondary" id="btn-copy-answer"><i class="fas fa-copy"></i> Copy</button>
+              <button class="btn btn-outline-secondary" id="btn-clear-answer"><i class="fas fa-trash"></i> Clear</button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Paste Answer Card -->
-    <div class="card m-3 shadow-sm" id="card-paste-answer">
-      <div class="card-header bg-light">
-        <span>Paste Answer</span>
-      </div>
-      <div class="card-body">
-        <textarea class="form-control mb-2" id="pasted-answer" rows="5"></textarea>
-        <div class="d-flex gap-2">
-          <button class="btn btn-primary flex-grow-1" id="btn-paste-answer">
-            <i class="fas fa-paste"></i> Paste
-          </button>
-          <button class="btn btn-outline-danger" id="btn-clear-pasted-answer">
-            <i class="fas fa-trash"></i> Clear
-          </button>
-          <button class="btn btn-success d-none" id="btn-submit-answer">
-            <i class="fas fa-check"></i> Submit
-          </button>
+      <div class="col-md-6">
+        <div class="card" id="card-paste-answer">
+          <div class="card-header"><span>Paste Answer</span></div>
+          <div class="card-body">
+            <textarea class="form-control mb-3" id="pasted-answer" rows="5"></textarea>
+            <div class="d-flex gap-2">
+              <button class="btn btn-primary" id="btn-paste-answer"><i class="fas fa-paste"></i> Paste</button>
+              <button class="btn btn-outline-secondary" id="btn-clear-pasted-answer"><i class="fas fa-trash"></i> Clear</button>
+              <button class="btn btn-success d-none" id="btn-submit-answer"><i class="fas fa-check"></i> Submit</button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- Chat Card -->
-    <div class="card m-3 d-none" id="card-chat">
-      <div class="card-body p-0">
-        <div id="chat-display" class="p-3"></div>
-        <div class="p-3 border-top">
-          <div class="input-group">
-            <input type="text" class="form-control" id="chat-username" placeholder="Your name">
-            <input type="text" class="form-control" id="chat-message" placeholder="Type a message...">
-            <button class="btn btn-primary" id="btn-send">
-              <i class="fas fa-paper-plane"></i>
+      <div class="col-12">
+        <div class="card d-none" id="card-chat">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Chat</span>
+            <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#settingsModal">
+              <i class="fas fa-cog"></i> Settings
             </button>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Settings Modal -->
-    <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
-      <div class="modal-dialog">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title" id="settingsModalLabel">Settings</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-          </div>
-          <div class="modal-body">
-            <div class="mb-3">
-              <label class="form-label">Offer/Answer Settings</label>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="auto-copy-sdp" checked>
-                <label class="form-check-label" for="auto-copy-sdp">
-                  Auto-copy SDP after generation
-                </label>
-              </div>
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="clear-after-submit">
-                <label class="form-check-label" for="clear-after-submit">
-                  Clear fields after submitting answer
-                </label>
-              </div>
+          <div class="card-body p-0">
+            <div class="p-3 border-bottom">
+              <input type="text" class="form-control" id="chat-username" placeholder="Name">
             </div>
-            <div class="mb-3">
-              <label for="chat-bg-color" class="form-label">Chat Background Color</label>
-              <input type="color" class="form-control form-control-color" id="chat-bg-color" value="#e5ddd5">
+            <div id="chat-display" class="p-3"></div>
+            <div class="p-3 border-top d-flex align-items-center gap-2">
+              <button class="btn btn-outline-secondary" id="btn-toggle-input">
+                <i class="fas fa-paperclip"></i>
+              </button>
+              <input type="text" class="form-control" id="chat-message" placeholder="Type a message...">
+              <input type="file" class="form-control d-none" id="chat-file" accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.pdf,.pptx,.zip,.rar">
+              <button class="btn btn-primary" id="btn-send"><i class="fas fa-paper-plane"></i></button>
             </div>
-          </div>
-          <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-            <button type="button" class="btn btn-primary" id="save-settings">Save</button>
           </div>
         </div>
       </div>
-    </div>
-  </div>
 
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  <script src="script.js"></script>
+      <div class="modal fade" id="settingsModal" tabindex="-1" aria-labelledby="settingsModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+          <div class="modal-content">
+            <div class="modal-header"><
+              <h5 class="modal-title" id="settingsModalLabel">Settings</h5>
+              <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+              <div class="mb-3">
+                <h6>Offer/Answer Settings</h6>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="auto-copy-sdp">
+                  <label class="form-check-label" for="auto-copy-sdp">Auto-copy SDP after generation</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="clear-after-submit">
+                  <label class="form-check-label" for="clear-after-submit">Clear fields after submitting answer</label>
+                </div>
+              </div>
+              <div class="mb-3">
+                <h6>Chat Background Color</h6>
+                <input type="color" class="form-control" id="chat-bg-color">
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+              <button type="button" class="btn btn-primary" id="save-settings">Save</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="script.js"></script>
 </body>
 </html>

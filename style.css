@@ -17,11 +17,12 @@ body {
 .card-header {
   background-color: #f8f9fa;
   border-bottom: 1px solid #dee2e6;
+  padding: 10px 15px;
 }
 
 .card-header span {
   font-weight: 600;
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 textarea[readonly] {
@@ -29,21 +30,22 @@ textarea[readonly] {
   color: #212529;
   font-family: monospace;
   border-radius: 6px;
+  font-size: 0.85rem;
 }
 
 #chat-display {
-  height: calc(100vh - 250px);
+  height: calc(100vh - 220px);
   overflow-y: auto;
   background-color: #e5ddd5;
   background-image: url('https://web.whatsapp.com/img/bg-chat-tile_9e8a2898faedb7db9bf56365b2c7a73d.png');
-  padding: 10px;
+  padding: 8px;
 }
 
 .chat-message {
-  max-width: 70%;
-  margin-bottom: 10px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  max-width: 75%;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border-radius: 7px;
   position: relative;
   word-wrap: break-word;
 }
@@ -60,24 +62,56 @@ textarea[readonly] {
 
 .chat-message .name {
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   margin-bottom: 2px;
 }
 
 .chat-message .message {
-  font-size: 0.95rem;
+  font-size: 0.9rem;
 }
 
-#chat-username, #chat-message {
-  border-radius: 20px;
+.media-content {
+  max-width: 100%;
+  max-height: 180px;
+  border-radius: 7px;
+  margin-top: 4px;
+}
+
+.download-btn {
+  display: inline-block;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  border-radius: 5px;
+}
+
+.download-btn i {
+  margin-right: 3px;
+}
+
+.message-meta {
+  font-size: 0.7rem;
+  margin-top: 3px;
+}
+
+.timestamp {
+  color: #6c757d;
+}
+
+.status-icon {
+  font-size: 0.65rem;
+}
+
+#chat-username, #chat-message, #chat-file {
+  border-radius: 18px;
   border: none;
   background-color: #ffffff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  font-size: 0.9rem;
+  padding: 8px 12px;
 }
 
 #chat-username {
-  max-width: 120px;
-  margin-right: 8px;
+  margin-bottom: 8px;
 }
 
 #chat-message::placeholder {
@@ -88,6 +122,8 @@ textarea[readonly] {
 .btn-primary {
   background-color: #128c7e;
   border-color: #128c7e;
+  padding: 8px 12px;
+  border-radius: 18px;
 }
 
 .btn-primary:hover {
@@ -95,10 +131,59 @@ textarea[readonly] {
   border-color: #0d6e63;
 }
 
+.btn-outline-secondary {
+  padding: 8px 12px;
+  border-radius: 18px;
+}
+
+.btn-toggle {
+  padding: 8px;
+  border-radius: 50%;
+}
+
 .btn i {
-  margin-right: 6px;
+  margin-right: 4px;
 }
 
 .modal-content {
   border-radius: 10px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 576px) {
+  .container {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .card {
+    margin-bottom: 8px;
+  }
+
+  .card-body {
+    padding: 10px;
+  }
+
+  .btn {
+    font-size: 0.85rem;
+    padding: 6px 10px;
+  }
+
+  #chat-display {
+    height: calc(100vh - 200px);
+  }
+
+  .chat-message {
+    max-width: 85%;
+  }
+
+  #chat-username, #chat-message, #chat-file {
+    font-size: 0.85rem;
+    padding: 6px 10px;
+  }
+
+  .d-flex.gap-2 {
+    flex-wrap: wrap;
+    gap: 8px !important;
+  }
 }
