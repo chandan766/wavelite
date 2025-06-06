@@ -1,0 +1,104 @@
+body {
+  background-color: #f0f2f5;
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.header {
+  background-color: #075e54;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.card {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.card-header {
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.card-header span {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+textarea[readonly] {
+  background-color: #e9ecef;
+  color: #212529;
+  font-family: monospace;
+  border-radius: 6px;
+}
+
+#chat-display {
+  height: calc(100vh - 250px);
+  overflow-y: auto;
+  background-color: #e5ddd5;
+  background-image: url('https://web.whatsapp.com/img/bg-chat-tile_9e8a2898faedb7db9bf56365b2c7a73d.png');
+  padding: 10px;
+}
+
+.chat-message {
+  max-width: 70%;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  position: relative;
+  word-wrap: break-word;
+}
+
+.chat-message.self {
+  background-color: #d9fdd3;
+  margin-left: auto;
+}
+
+.chat-message.other {
+  background-color: #ffffff;
+  margin-right: auto;
+}
+
+.chat-message .name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin-bottom: 2px;
+}
+
+.chat-message .message {
+  font-size: 0.95rem;
+}
+
+#chat-username, #chat-message {
+  border-radius: 20px;
+  border: none;
+  background-color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+#chat-username {
+  max-width: 120px;
+  margin-right: 8px;
+}
+
+#chat-message::placeholder {
+  font-style: italic;
+  color: #6c757d;
+}
+
+.btn-primary {
+  background-color: #128c7e;
+  border-color: #128c7e;
+}
+
+.btn-primary:hover {
+  background-color: #0d6e63;
+  border-color: #0d6e63;
+}
+
+.btn i {
+  margin-right: 6px;
+}
+
+.modal-content {
+  border-radius: 10px;
+}
