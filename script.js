@@ -1,432 +1,214 @@
-let localConnection, remoteConnection;
-let dataChannel, receiveChannel;
-let settings = {
-  autoCopySdp: true,
-  clearAfterSubmit: false,
-  chatBgColor: '#e5ddd5'
-};
+// --- Config ---
+const FORM_URL = "https://docs.google.com/forms/u/0/d/e/1FAIpQLSej8F-WqVXrneoK1caUwagNb8EbcsLG7c2IWbgzlGIxd7xYAQ/formResponse";
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/1oQ7TEJLutMpXo4gi75jTOmlBGPBHlF3ekE0mtA3nK_M/gviz/tq?tqx=out:json";
+const DELETE_URL = "https://script.google.com/macros/s/AKfycbyNUCRo3JKNk_bVq9VcdpbICGuBiTytBGRAjFr7VDrHVvG6TMxaA195sBSSBOeiR1DG/exec";
 
-// File transfer variables
-const CHUNK_SIZE = 16384; // 16KB chunks for data channel
-let fileReader = new FileReader();
-let receivedFileData = {};
-let receivedFileBuffer = [];
-let messageStatusMap = new Map(); // Tracks message status (pending, sent, delivered)
-let isFileInputMode = false; // Tracks toggle state (text or file input)
+let localConnection, dataChannel;
+let pollingInterval;
 
-$(document).ready(function () {
-  // Load settings from localStorage if available
-  if (localStorage.getItem('waveliteSettings')) {
-    settings = JSON.parse(localStorage.getItem('waveliteSettings'));
-    applySettings();
-  }
+$(document).ready(() => {
+  $('#peerIdSubmit').click(async function (e) {
+    e.preventDefault(); // prevent form default submission
 
-  // === Clipboard Buttons ===
-  $('#btn-copy-offer').click(() => copyToClipboard('#offer-sdp'));
-  $('#btn-copy-answer').click(() => copyToClipboard('#answer-sdp'));
+    const username = $('#chat-username').val().trim();
+    const peerId = $('#peer-id').val().trim();
 
-  $('#btn-paste-offer').click(async () => pasteFromClipboard('#pasted-offer'));
-  $('#btn-paste-answer').click(async () => {
-    await pasteFromClipboard('#pasted-answer');
-    $('#btn-submit-answer').removeClass('d-none');
-  });
+    // Clear previous error messages
+    $('#name-error').text('');
+    $('#peer-error').text('');
 
-  // === Clear Buttons ===
-  $('#btn-clear-offer').click(() => $('#offer-sdp').val(''));
-  $('#btn-clear-answer').click(() => $('#answer-sdp').val(''));
-  $('#btn-clear-pasted-offer').click(() => $('#pasted-offer').val(''));
-  $('#btn-clear-pasted-answer').click(() => $('#pasted-answer').val(''));
+    let hasError = false;
 
-  // === Generate Offer ===
-  $('#btn-generate-offer').click(async () => {
-    console.time('offerGeneration');
-    console.log('Starting offer generation...');
-
-    try {
-      localConnection = new RTCPeerConnection({
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-      });
-      console.log('RTCPeerConnection created');
-
-      dataChannel = localConnection.createDataChannel("chat");
-      setupDataChannel();
-      console.log('Data channel created');
-
-      localConnection.onicecandidate = (e) => {
-        console.log('ICE candidate event:', e.candidate);
-        if (e.candidate === null) {
-          console.log('ICE gathering complete');
-          const sdp = JSON.stringify(localConnection.localDescription);
-          $('#offer-sdp').val(sdp);
-          if (settings.autoCopySdp) {
-            navigator.clipboard.writeText(sdp).then(() => {
-              console.log('SDP copied to clipboard');
-            }).catch(err => {
-              console.error('Failed to copy SDP:', err);
-            });
-          }
-          console.timeEnd('offerGeneration');
-        }
-      };
-
-      const offer = await localConnection.createOffer();
-      console.log('Offer created:', offer);
-      await localConnection.setLocalDescription(offer);
-      console.log('Local description set');
-    } catch (error) {
-      console.error('Error during offer generation:', error);
-      alert('Failed to generate offer. Check console for details.');
-      console.timeEnd('offerGeneration');
+    if (!username) {
+      $('#name-error').text('Name is required');
+      hasError = true;
     }
-  });
 
-  // === Generate Answer ===
-  $('#btn-generate-answer').click(async () => {
-    const offer = JSON.parse($('#pasted-offer').val());
-
-    remoteConnection = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
-    });
-    remoteConnection.ondatachannel = (event) => {
-      receiveChannel = event.channel;
-      setupReceiveChannel();
-    };
-
-    remoteConnection.onicecandidate = (e) => {
-      console.log('ICE candidate event:', e.candidate);
-      if (e.candidate === null) {
-        console.log('ICE gathering complete for answer');
-        const sdp = JSON.stringify(remoteConnection.localDescription);
-        $('#answer-sdp').val(sdp);
-        if (settings.autoCopySdp) {
-          navigator.clipboard.writeText(sdp).then(() => {
-            console.log('SDP copied to clipboard');
-          }).catch(err => {
-            console.error('Failed to copy SDP:', err);
-          });
-        }
-      }
-    };
-
-    await remoteConnection.setRemoteDescription(new RTCSessionDescription(offer));
-    const answer = await remoteConnection.createAnswer();
-    await remoteConnection.setLocalDescription(answer);
-  });
-
-  // === Submit Answer ===
-  $('#btn-submit-answer').click(async () => {
-    const answer = JSON.parse($('#pasted-answer').val());
-    await localConnection.setRemoteDescription(new RTCSessionDescription(answer));
-    transitionToChat();
-    if (settings.clearAfterSubmit) {
-      $('#pasted-answer').val('');
-      $('#offer-sdp').val('');
-      $('#pasted-offer').val('');
-      $('#answer-sdp').val('');
+    if (!peerId) {
+      $('#peer-error').text('Peer ID is required');
+      hasError = true;
     }
-  });
 
-  // === Toggle Input Mode ===
-  $('#btn-toggle-input').click(() => {
-    isFileInputMode = !isFileInputMode;
-    if (isFileInputMode) {
-      $('#chat-message').addClass('d-none');
-      $('#chat-file').removeClass('d-none');
-      $('#btn-send').html('<i class="fas fa-file-upload"></i>');
-    } else {
-      $('#chat-file').addClass('d-none');
-      $('#chat-message').removeClass('d-none');
-      $('#btn-send').html('<i class="fas fa-paper-plane"></i>');
+    if (hasError){
+      return;
     }
+
+    // Proceed to connect
+    $('#peerIdSubmit').prop('disabled', true).text('Connecting...');
+    $('#peerId').val(peerId);
+    startConnection(peerId);
+
+    // setTimeout(() => {
+    //   $('#peerIdSubmit').prop('disabled', false).text('Connect');
+    // }, 30000);
   });
 
-  // === Send Message or File ===
-  $('#btn-send').click(() => {
-    const name = $('#chat-username').val() || 'Anonymous';
-    const messageId = Date.now().toString();
-    const isChannelOpen = (dataChannel && dataChannel.readyState === 'open') ||
-                         (receiveChannel && receiveChannel.readyState === 'open');
-
-    if (isFileInputMode) {
-      const fileInput = $('#chat-file')[0];
-      if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        displayMessage(name, file.name, true, file.type, file, messageId, isChannelOpen ? 'sent' : 'pending');
-        if (isChannelOpen) {
-          sendFile(file, name, messageId);
-          messageStatusMap.set(messageId, 'sent');
-        } else {
-          messageStatusMap.set(messageId, 'pending');
-          alert('Connection not ready. File queued until connection is established.');
-        }
-        $('#chat-file').val('');
-      } else {
-        alert('Please select a file to send.');
-      }
-    } else {
-      const msg = $('#chat-message').val();
-      if (msg.trim()) {
-        const payload = JSON.stringify({ type: 'text', name, message: msg, messageId });
-        displayMessage(name, msg, true, 'text', null, messageId, isChannelOpen ? 'sent' : 'pending');
-        if (isChannelOpen) {
-          messageStatusMap.set(messageId, 'sent');
-          if (dataChannel && dataChannel.readyState === 'open') {
-            dataChannel.send(payload);
-          } else if (receiveChannel && receiveChannel.readyState === 'open') {
-            receiveChannel.send(payload);
-          }
-        } else {
-          messageStatusMap.set(messageId, 'pending');
-          alert('Connection not ready. Message queued until connection is established.');
-        }
-        $('#chat-message').val('');
-      }
-    }
-  });
-  // === Save Settings ===
-  $('#save-settings').click(() => {
-    settings.autoCopySdp = $('#auto-copy-sdp').is(':checked');
-    settings.clearAfterSubmit = $('#clear-after-submit').is(':checked');
-    settings.chatBgColor = $('#chat-bg-color').val();
-    localStorage.setItem('waveliteSettings', JSON.stringify(settings));
-    applySettings();
-    $('#settingsModal').modal('hide');
-  });
 });
 
-function copyToClipboard(selector) {
-  const text = $(selector).val();
-  navigator.clipboard.writeText(text);
+async function startConnection(peerId) {
+  const offerEntry = await fetchSDP(peerId, 'offer');
+  if (offerEntry) {
+    // Act as answerer
+    console.log("Offer found, acting as answerer");
+    await setupAnswerer(offerEntry);
+  } else {
+    // Act as offerer
+    console.log("No offer found, acting as offerer");
+    await setupOfferer(peerId);
+  }
 }
 
-async function pasteFromClipboard(selector) {
-  const text = await navigator.clipboard.readText();
-  $(selector).val(text);
+async function setupOfferer(peerId) {
+  localConnection = createPeerConnection();
+  dataChannel = localConnection.createDataChannel("chat");
+  setupDataChannel();
+  $('#peerIdSubmit').text('Offer Creating...');
+  const offer = await localConnection.createOffer();
+  await localConnection.setLocalDescription(offer);
+  await waitForIceGathering(localConnection);
+  await submitSDP(peerId, 'offer', JSON.stringify(localConnection.localDescription));
+  console.log("Offer submitted");
+
+  // 🔁 Now start polling for the answer
+  pollingInterval = setInterval(async () => {
+    const answerEntry = await fetchSDP(peerId, 'answer');
+    if (answerEntry) {
+      clearInterval(pollingInterval);
+      await localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(answerEntry.sdp)));
+      deletePeerFromSheet(peerId);
+      transitionToChat();
+    }
+  }, 3000); // poll every 3 seconds
+}
+
+
+async function setupAnswerer(offerEntry) {
+  const remoteConnection = createPeerConnection();
+
+  remoteConnection.ondatachannel = (event) => {
+    dataChannel = event.channel;
+    setupDataChannel();
+  };
+
+  await remoteConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerEntry.sdp)));
+  const answer = await remoteConnection.createAnswer();
+  await remoteConnection.setLocalDescription(answer);
+
+  await waitForIceGathering(remoteConnection);
+  await submitSDP(offerEntry.peerId, 'answer', JSON.stringify(remoteConnection.localDescription));
+  deletePeerFromSheet(peerId);
+  transitionToChat();
+}
+
+function createPeerConnection() {
+  return new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  });
+}
+
+function waitForIceGathering(pc) {
+  $('#peerIdSubmit').text('Ice Gathering...');
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === "complete") return resolve();
+    const checkState = () => {
+      if (pc.iceGatheringState === "complete") {
+        pc.removeEventListener("icegatheringstatechange", checkState);
+        resolve();
+      }
+    };
+    pc.addEventListener("icegatheringstatechange", checkState);
+  });
+}
+
+async function submitSDP(peerId, role, sdp) {
+  $('#peerIdSubmit').text('Submitting Offer...');
+  const form = new FormData();
+  form.append("entry.1244760702", peerId);
+  form.append("entry.443244439", role);
+  form.append("entry.479288741", sdp);
+  await fetch(FORM_URL, {
+    method: "POST",
+    mode: "no-cors",
+    body: form
+  });
+  $('#peerIdSubmit').text('Offer Submitted');
+}
+
+async function fetchSDP(peerId, role) {
+  try {
+    const res = await fetch(SHEET_URL);
+    const text = await res.text();
+    const json = JSON.parse(text.substring(47).slice(0, -2));
+    const rows = json.table.rows;
+    for (let row of rows) {
+      const pid = row.c[1]?.v;
+      const r = row.c[2]?.v;
+      const sdp = row.c[3]?.v;
+      if (pid == peerId && r == role && sdp) {
+        return { peerId: pid, role: r, sdp };
+      }
+    }
+    return null;
+  } catch (e) {
+    console.error("Failed to fetch from sheet:", e);
+    return null;
+  }
 }
 
 function setupDataChannel() {
   dataChannel.onopen = () => {
-    console.log('Data channel open');
-    // Update pending messages to sent
-    messageStatusMap.forEach((status, messageId) => {
-      if (status === 'pending') {
-        messageStatusMap.set(messageId, 'sent');
-        updateMessageStatus(messageId, 'sent');
-        // Resend pending messages/files
-        const messageElement = $(`#message-${messageId}`);
-        const name = messageElement.find('.name').text();
-        const content = messageElement.find('.message').text();
-        const type = messageElement.data('type');
-        if (type === 'text') {
-          const payload = JSON.stringify({ type: 'text', name, message: content, messageId });
-          dataChannel.send(payload);
-        } else {
-          const file = messageElement.data('file');
-          if (file) {
-            sendFile(file, name, messageId);
-          }
-        }
-      }
-    });
-  };
-  dataChannel.onmessage = (e) => handleMessage(e.data);
-}
-
-function setupReceiveChannel() {
-  receiveChannel.onopen = () => {
-    console.log('Receive channel open');
+    console.log("Data channel opened");
+    deletePeerFromSheet(peerId);
     transitionToChat();
-    // Update pending messages to sent
-    messageStatusMap.forEach((status, messageId) => {
-      if (status === 'pending') {
-        messageStatusMap.set(messageId, 'sent');
-        updateMessageStatus(messageId, 'sent');
-        // Resend pending messages/files
-        const messageElement = $(`#message-${messageId}`);
-        const name = messageElement.find('.name').text();
-        const content = messageElement.find('.message').text();
-        const type = messageElement.data('type');
-        if (type === 'text') {
-          const payload = JSON.stringify({ type: 'text', name, message: content, messageId });
-          receiveChannel.send(payload);
-        } else {
-          const file = messageElement.data('file');
-          if (file) {
-            sendFile(file, name, messageId);
-          }
-        }
-      }
-    });
   };
-  receiveChannel.onmessage = (e) => handleMessage(e.data);
-}
-
-function sendFile(file, name, messageId) {
-  const fileMeta = {
-    type: 'file',
-    name,
-    fileName: file.name,
-    fileType: file.type,
-    fileSize: file.size,
-    messageId
+  dataChannel.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    displayMessage(msg.name, msg.message, false, 'text', null, msg.messageId, 'delivered');
   };
-  const metaPayload = JSON.stringify(fileMeta);
-
-  if (dataChannel && dataChannel.readyState === 'open') {
-    dataChannel.send(metaPayload);
-  } else if (receiveChannel && receiveChannel.readyState === 'open') {
-    receiveChannel.send(metaPayload);
-  }
-
-  let offset = 0;
-  fileReader.onload = (e) => {
-    const chunk = e.target.result;
-    if (dataChannel && dataChannel.readyState === 'open') {
-      dataChannel.send(chunk);
-    } else if (receiveChannel && receiveChannel.readyState === 'open') {
-      receiveChannel.send(chunk);
-    }
-    offset += chunk.byteLength;
-    if (offset < file.size) {
-      readSlice(offset, file);
-    }
-  };
-  readSlice(offset, file);
-}
-
-function readSlice(offset, file) {
-  const slice = file.slice(offset, offset + CHUNK_SIZE);
-  fileReader.readAsArrayBuffer(slice);
-}
-
-function handleMessage(data) {
-  if (typeof data === 'string') {
-    const payload = JSON.parse(data);
-    if (payload.type === 'text') {
-      displayMessage(payload.name, payload.message, false, 'text', null, payload.messageId, 'delivered');
-      messageStatusMap.set(payload.messageId, 'delivered');
-    } else if (payload.type === 'file') {
-      receivedFileData = {
-        name: payload.name,
-        fileName: payload.fileName,
-        fileType: payload.fileType,
-        fileSize: payload.fileSize,
-        messageId: payload.messageId,
-        receivedSize: 0
-      };
-      receivedFileBuffer = [];
-    }
-  } else if (data instanceof ArrayBuffer) {
-    receivedFileBuffer.push(data);
-    receivedFileData.receivedSize += data.byteLength;
-
-    if (receivedFileData.receivedSize >= receivedFileData.fileSize) {
-      const blob = new Blob(receivedFileBuffer, { type: receivedFileData.fileType });
-      displayMessage(receivedFileData.name, receivedFileData.fileName, false, receivedFileData.fileType, blob, receivedFileData.messageId, 'delivered');
-      receivedFileData = {};
-      receivedFileBuffer = [];
-    }
-  }
-}
-
-function displayMessage(name, content, isSelf, type, file = null, messageId, status = 'pending') {
-  const container = $('#chat-display');
-  const alignClass = isSelf ? 'self ms-auto' : 'other me-auto';
-  const timestamp = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-  let contentHtml = '';
-  let statusIcon = '';
-
-  if (status === 'pending') {
-    statusIcon = '<i class="fas fa-clock status-icon text-muted"></i>';
-  } else if (status === 'sent') {
-    statusIcon = '<i class="fas fa-check status-icon text-muted"></i>';
-  } else if (status === 'delivered') {
-    statusIcon = '<i class="fas fa-check-double status-icon text-info"></i>';
-  }
-
-  if (type === 'text') {
-    contentHtml = `<div class="message">${content}</div>`;
-  } else if (type.startsWith('image/')) {
-    const url = file ? URL.createObjectURL(file) : content;
-    contentHtml = `
-      <div class="message">
-        <img src="${url}" class="media-content" alt="Shared image">
-        <a href="${url}" download="${content}" class="btn btn-sm btn-outline-secondary mt-2 download-btn">
-          <i class="fas fa-download"></i> Download
-        </a>
-      </div>`;
-  } else if (type.startsWith('audio/')) {
-    const url = file ? URL.createObjectURL(file) : content;
-    contentHtml = `
-      <div class="message">
-        <audio controls class="media-content"><source src="${url}" type="${type}"></audio>
-        <a href="${url}" download="${content}" class="btn btn-sm btn-outline-secondary mt-2 download-btn">
-          <i class="fas fa-download"></i> Download
-        </a>
-      </div>`;
-  } else if (type.startsWith('video/')) {
-    const url = file ? URL.createObjectURL(file) : content;
-    contentHtml = `
-      <div class="message">
-        <video controls class="media-content"><source src="${url}" type="${type}"></video>
-        <a href="${url}" download="${content}" class="btn btn-sm btn-outline-secondary mt-2 download-btn">
-          <i class="fas fa-download"></i> Download
-        </a>
-      </div>`;
-  } else {
-    const url = file ? URL.createObjectURL(file) : content;
-    contentHtml = `
-      <div class="message">
-        <i class="fas fa-file-alt"></i> ${content}
-        <a href="${url}" download="${content}" class="btn btn-sm btn-outline-secondary mt-2 download-btn">
-          <i class="fas fa-download"></i> Download
-        </a>
-      </div>`;
-  }
-
-  container.append(`
-    <div class="chat-message ${alignClass}" id="message-${messageId}" data-type="${type}" data-file="${file ? 'file' : ''}">
-      <div class="name">${name}</div>
-      ${contentHtml}
-      <div class="message-meta d-flex justify-content-end gap-1">
-        <span class="timestamp text-muted">${timestamp}</span>
-        ${isSelf ? statusIcon : ''}
-      </div>
-    </div>
-  `);
-  container.scrollTop(container[0].scrollHeight);
-}
-
-function updateMessageStatus(messageId, status) {
-  const messageElement = $(`#message-${messageId} .message-meta`);
-  if (messageElement.length) {
-    let statusIcon = '';
-    if (status === 'pending') {
-      statusIcon = '<i class="fas fa-clock status-icon text-muted"></i>';
-    } else if (status === 'sent') {
-      statusIcon = '<i class="fas fa-check status-icon text-muted"></i>';
-    } else if (status === 'delivered') {
-      statusIcon = '<i class="fas fa-check-double status-icon text-info"></i>';
-    }
-    messageElement.find('.status-icon').replaceWith(statusIcon);
-  }
 }
 
 function transitionToChat() {
-  ['#card-generate-offer', '#card-paste-offer', '#card-generate-answer', '#card-paste-answer']
-    .forEach(id => $(id).addClass('d-none'));
-  $('#card-chat').removeClass('d-none');
+  $('#login-section').removeClass('d-flex').addClass('d-none');
+  $('#chat-section').removeClass('d-none');
+  $('#btn-send-text').click(() => {
+    const name = $('#chat-username').val() || 'Anonymous';
+    const message = $('#chat-message').val();
+    const messageId = Date.now().toString();
+    if (message && dataChannel.readyState === 'open') {
+      dataChannel.send(JSON.stringify({ type: 'text', name, message, messageId }));
+      displayMessage(name, message, true, 'text', null, messageId, 'sent');
+      $('#chat-message').val('');
+    }
+  });
 }
 
-function applySettings() {
-  $('#auto-copy-sdp').prop('checked', settings.autoCopySdp);
-  $('#clear-after-submit').prop('checked', settings.clearAfterSubmit);
-  $('#chat-bg-color').val(settings.chatBgColor);
-  $('#chat-display').css('background-color', settings.chatBgColor);
+function displayMessage(name, content, isSelf, type, file, messageId, status) {
+  const alignClass = isSelf ? 'self' : 'other';
+  const statusIcon = isSelf ? `<span class="status-icon text-muted ms-2"><i class="fas fa-check-double"></i></span>` : '';
+  const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  $('#chat-display').append(`
+    <div class="chat-message ${alignClass} px-3">
+      <div class="message py-1" style="font-size:12px;font-weight:450;">${content}</div>
+      <div class="message-meta d-flex justify-content-end border-top border-secondary mt-2">
+        <span class="timestamp text-end" style="font-size:10px;">${isSelf ?'':`<span class="name" style="font-size:12px;">${name}</span>`} ${timestamp}</span>
+        ${statusIcon}
+      </div>
+    </div>
+  `);
+  $('#chat-display').scrollTop($('#chat-display')[0].scrollHeight);
+}
+
+
+function deletePeerFromSheet(peerId) {
+  fetch(DELETE_URL, {
+    method: "POST",
+    body: new URLSearchParams({ peerId })
+  })
+    .then(res => res.text())
+    .then(result => console.log("Deleted:", result))
+    .catch(err => console.error("Delete error:", err));
 }
