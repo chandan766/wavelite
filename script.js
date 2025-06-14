@@ -135,6 +135,16 @@ $(document).ready(() => {
       alert('Please wait until the connection is established before sending a message.');
     }
   });
+  // Handle delete all button click
+  $('#delete-all-btn').click(() => {
+      fetch(DELETE_URL, {
+      method: "POST",
+      body: new URLSearchParams({ peerId: '' }) // Empty peerId to delete all entries
+    })
+      .then(res => res.text())
+      .then(result => alert("Deleted all SDP entries:", result))
+      .catch(err => alert("Error deleting SDP entries:", err));
+    });
 });
 
 async function startConnection(peerId) {
