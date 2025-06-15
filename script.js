@@ -267,7 +267,7 @@ function createPeerConnection() {
       { urls: 'stun:stun3.l.google.com:19302' },
       { urls: 'stun:stun4.l.google.com:19302' },
     ], 
-    iceCandidatePoolSize: 2 
+    iceCandidatePoolSize: 0 
   });
   pc.oniceconnectionstatechange = () => {
     console.log('ICE connection state:', pc.iceConnectionState);
