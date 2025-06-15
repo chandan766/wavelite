@@ -6,7 +6,7 @@ const DELETE_URL = "https://script.google.com/macros/s/AKfycbyNUCRo3JKNk_bVq9Vcd
 let localConnection, dataChannel;
 let pollingInterval;
 let peerId = null; // Global peerId variable
-const CONNECTION_TIMEOUT = 30000; // 30 seconds timeout for connection
+const CONNECTION_TIMEOUT = 40000; // 30 seconds timeout for connection
 const CHUNK_TIMEOUT = 15000; // 15 seconds for chunk timeout
 const MAX_RETRIES = 3; // Maximum retries for missing chunks
 
@@ -50,6 +50,7 @@ $(document).ready(() => {
 
     // Proceed to connect
     $('#peerIdSubmit').prop('disabled', true).text('Connecting...');
+    $('#joinPeer').prop('disabled', true).text('Join');
     $('#peerId').val(peerId);
     startConnection(peerId);
   });
@@ -135,7 +136,8 @@ $(document).ready(() => {
       alert('Please wait until the connection is established before sending a message.');
     }
   });
-  // Handle delete all button click
+
+    // Handle delete all button click
   $('#delete-all-btn').click(() => {
       fetch(DELETE_URL, {
       method: "POST",
@@ -145,6 +147,40 @@ $(document).ready(() => {
       .then(result => alert("Deleted all SDP entries:", result))
       .catch(err => alert("Error deleting SDP entries:", err));
     });
+
+    // Handle Join button click
+  $('#joinPeer').click(async function (e) {
+    e.preventDefault();
+
+    const username = $('#chat-username').val().trim();
+    peerId = $('#peer-id').val().trim(); // Set global peerId
+
+    // Clear previous error messages
+    $('#name-error').text('');
+    $('#peer-error').text('');
+
+    let hasError = false;
+
+    if (!username) {
+      $('#name-error').text('Name is required');
+      hasError = true;
+    }
+
+    if (!peerId) {
+      $('#peer-error').text('Peer ID is required');
+      hasError = true;
+    }
+
+    if (hasError) {
+      return;
+    }
+
+    // Proceed to join
+    $('#joinPeer').prop('disabled', true).text('Joining...');
+    $('#peerIdSubmit').prop('disabled', true).text('Connect');
+    $('#peerId').val(peerId);
+    startJoinConnection(peerId);
+  });
 });
 
 async function startConnection(peerId) {
@@ -180,6 +216,7 @@ async function setupOfferer(peerId) {
       if (Date.now() - startTime > CONNECTION_TIMEOUT) {
         clearInterval(pollingInterval);
         $('#peerIdSubmit').prop('disabled', false).text('Connect');
+        $('#joinPeer').prop('disabled', false).text('Join');
         alert('Connection timed out. Please try again or check peer ID.');
         return;
       }
@@ -193,6 +230,7 @@ async function setupOfferer(peerId) {
   } catch (error) {
     console.error('Error setting up offerer:', error);
     $('#peerIdSubmit').prop('disabled', false).text('Connect');
+    $('#joinPeer').prop('disabled', false).text('Join');
     alert('Failed to establish connection. Please try again.');
   }
 }
@@ -215,6 +253,7 @@ async function setupAnswerer(offerEntry) {
   } catch (error) {
     console.error('Error setting up answerer:', error);
     $('#peerIdSubmit').prop('disabled', false).text('Connect');
+    $('#joinPeer').prop('disabled', false).text('Join');
     alert('Failed to establish connection. Please try again.');
   }
 }
@@ -577,7 +616,6 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
     alert('Failed to display message in UI. Please refresh the page.');
   }
 }
-
 function deletePeerFromSheet(peerId) {
   if (!peerId) {
     console.error("peerId is undefined in deletePeerFromSheet");
@@ -587,7 +625,40 @@ function deletePeerFromSheet(peerId) {
     method: "POST",
     body: new URLSearchParams({ peerId })
   })
-    .then(res => res.text())
-    .then(result => console.log("Deleted SDP for peerId:", peerId, result))
-    .catch(err => console.error("Delete error for peerId:", peerId, err));
+  .then(res => res.text())
+  .then(result => console.log("Deleted SDP for peerId:", peerId, result))
+  .catch(err => console.error("Delete error for peerId:", peerId, err));
+}
+
+async function startJoinConnection(peerId) {
+  console.log(`Starting join connection for peerId: ${peerId}`);
+  $('#joinPeer').text('Waiting for offer...');
+
+  // Start polling for offer with timeout
+  let startTime = Date.now();
+  pollingInterval = setInterval(async () => {
+    if (Date.now() - startTime > CONNECTION_TIMEOUT) {
+      clearInterval(pollingInterval);
+      $('#joinPeer').prop('disabled', false).text('Join');
+      $('#peerIdSubmit').prop('disabled', false).text('Connect');
+      alert('No offer found. Please try again or check peer ID.');
+      return;
+    }
+    const offerEntry = await fetchSDP(peerId, 'offer');
+    if (offerEntry) {
+      console.log(`Offer SDP found for peerId: ${peerId}, proceeding as answerer`);
+      clearInterval(pollingInterval);
+      try {
+        await setupAnswerer(offerEntry);
+        $('#joinPeer').text('Connected');
+      } catch (error) {
+        console.error('Error during join connection:', error);
+        $('#joinPeer').prop('disabled', false).text('Join');
+        $('#peerIdSubmit').prop('disabled', false).text('Connect');
+        alert('Failed to join connection. Please try again.');
+      }
+    } else {
+      console.log(`No offer SDP found yet for peerId: ${peerId}`);
+    }
+  }, 3000); // Polling interval 3 seconds
 }

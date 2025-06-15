@@ -38,7 +38,10 @@
           <input type="text" id="peer-id" class="form-control" placeholder="Enter Peer ID">
           <span id="peer-error" class="text-danger small"></span>
         </div>
-        <button type="submit" class="btn btn-primary w-100" id="peerIdSubmit">Connect</button>
+        <div class="d-flex justify-content-between">
+          <button type="submit" id="peerIdSubmit" class="btn btn-primary w-45">Connect</button>
+          <button type="button" id="joinPeer" class="btn btn-secondary w-45">Join</button>
+        </div>
       </form>
     </div>
   </main>
@@ -46,7 +49,7 @@
 
   <!-- Chat section -->
   <div id="chat-section" class="d-none">
-    <div id="chat-display" class="d-flex flex-column"></div>
+    <div id="chat-display" class="d-flex flex-column pt-2"></div>
 
     <div class="chat-input-section">
       <div class="d-flex align-items-center gap-2">
