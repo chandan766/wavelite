@@ -12,8 +12,8 @@ const CHUNK_TIMEOUT = 15000; // 15 seconds for chunk timeout
 const MAX_RETRIES = 3; // Maximum retries for missing chunks
 
 // File sending configuration
-//const CHUNK_SIZE = 16384; // 16KB chunks for WebRTC data channel
-const CHUNK_SIZE = 65536; // 64KB chunks for WebRTC data channel
+// const CHUNK_SIZE = 16384; // 16KB chunks for WebRTC data channel
+const CHUNK_SIZE = 65536; // 16KB chunks for WebRTC data channel
 const BUFFER_THRESHOLD = 262144; // 256KB buffer threshold to prevent overflow
 let fileReader = new FileReader();
 let currentFile = null;
@@ -230,10 +230,34 @@ $(document).ready(() => {
     const offer = await fetchSDP(savedPeers, "offer");
     if (offer) {
       if (Notification.permission === "granted" && document.visibilityState !== "visible") {
-        new Notification("Wavelite", {
+        const notification = new Notification("Wavelite", {
           body: `Peer "${savedPeers}" is requesting to connect.`,
           icon: "/logo.png"
         });
+
+        notification.onclick = function (event) {
+          event.preventDefault(); // Prevent default behavior like focusing the tab
+
+          // Bring window to front
+          window.focus();
+
+          // Trigger your modal
+          $('#autoJoinMessage').text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);
+          const autoJoinModal = new bootstrap.Modal(document.getElementById('autoJoinModal'));
+          autoJoinModal.show();
+
+          // Bind Join button logic
+          $('#autoJoinConfirmBtn').off('click').on('click', () => {
+            autoJoinModal.hide();
+            setTimeout(() => {
+              isManuallyConnecting = true;
+              $('#peer-id').val(savedPeers);
+              $('#chat-username').val(savedPeerName);
+              $('#joinPeer').click(); // Trigger join
+            }, 300);
+          });
+        };
+
       }else if (Notification.permission !== "denied") {
         // Ask for permission only if not previously denied
         Notification.requestPermission().then(permission => {
@@ -757,3 +781,4 @@ async function startJoinConnection(peerId) {
     }
   }, 3000); // Polling interval 3 seconds
 }
+
