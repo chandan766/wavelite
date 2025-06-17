@@ -12,7 +12,8 @@ const CHUNK_TIMEOUT = 15000; // 15 seconds for chunk timeout
 const MAX_RETRIES = 3; // Maximum retries for missing chunks
 
 // File sending configuration
-const CHUNK_SIZE = 16384; // 16KB chunks for WebRTC data channel
+//const CHUNK_SIZE = 16384; // 16KB chunks for WebRTC data channel
+const CHUNK_SIZE = 65536; // 64KB chunks for WebRTC data channel
 const BUFFER_THRESHOLD = 262144; // 256KB buffer threshold to prevent overflow
 let fileReader = new FileReader();
 let currentFile = null;
