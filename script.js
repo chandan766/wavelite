@@ -26,7 +26,7 @@ $(document).ready(() => {
   $('#peerIdSubmit').click(async function (e) {
     e.preventDefault(); // prevent form default submission
     isManuallyConnecting = true;
-    const username = $('#chat-username').val().trim();
+    var username = $('#chat-username').val().trim();
     peerId = $('#peer-id').val().trim(); // Set global peerId
 
     // Clear previous error messages
