@@ -680,7 +680,12 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
     const fileNameDisplay = `<div class="file-name" style="font-size: 13px; font-weight: 500;">${content}</div>`;
 
     if (isImage) {
-      messageContent = `<img src="${file}" alt="${content}" style="max-width: 300px; max-height: 300px; object-fit: contain;" class="img-fluid rounded mt-2" /><br>${fileNameDisplay} ${downloadButton}`;
+      //messageContent = `<img src="${file}" alt="${content}" style="max-width: 300px; max-height: 300px; object-fit: contain;" class="img-fluid rounded mt-2" /><br>${fileNameDisplay} ${downloadButton}`;
+      messageContent = `
+      <div class="image-wrapper" style="max-width: 100%; overflow: hidden;">
+        <img src="${file}" alt="${content}" class="img-fluid rounded mt-2" style="width: 100%; height: auto; object-fit: contain;" />
+      </div>
+      <br>${fileNameDisplay} ${downloadButton}`;
     } else if (isAudio) {
       messageContent = `<audio controls src="${file}" class="mt-2" style="width: 100%; max-width: 300px;"></audio><br>${fileNameDisplay} ${downloadButton}`;
     } else if (isVideo) {
