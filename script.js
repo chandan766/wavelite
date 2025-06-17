@@ -36,13 +36,15 @@ $(document).ready(() => {
     let hasError = false;
 
     if (!username) {
-      $('#name-error').text('Name is required');
-      hasError = true;
+      // $('#name-error').text('Name is required');
+      // hasError = true;
+      username = "Anonymous";
     }
 
     if (!peerId) {
-      $('#peer-error').text('Peer ID is required');
-      hasError = true;
+      // $('#peer-error').text('Peer ID is required');
+      // hasError = true;
+      peerId = "peer123"
     }
 
     if (hasError) {
