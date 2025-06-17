@@ -5,6 +5,7 @@ const DELETE_URL = "https://script.google.com/macros/s/AKfycbyNUCRo3JKNk_bVq9Vcd
 
 let localConnection, dataChannel;
 let pollingInterval;
+let isManuallyConnecting = false;
 let peerId = null; // Global peerId variable
 const CONNECTION_TIMEOUT = 40000; // 30 seconds timeout for connection
 const CHUNK_TIMEOUT = 15000; // 15 seconds for chunk timeout
@@ -24,7 +25,7 @@ let receivedFileInfo = null; // Global to store received file metadata
 $(document).ready(() => {
   $('#peerIdSubmit').click(async function (e) {
     e.preventDefault(); // prevent form default submission
-
+    isManuallyConnecting = true;
     const username = $('#chat-username').val().trim();
     peerId = $('#peer-id').val().trim(); // Set global peerId
 
@@ -151,7 +152,7 @@ $(document).ready(() => {
     // Handle Join button click
   $('#joinPeer').click(async function (e) {
     e.preventDefault();
-
+    isManuallyConnecting = true;
     const username = $('#chat-username').val().trim();
     peerId = $('#peer-id').val().trim(); // Set global peerId
 
@@ -181,6 +182,72 @@ $(document).ready(() => {
     $('#peerId').val(peerId);
     startJoinConnection(peerId);
   });
+
+  $('#confirmSavePeerBtn').click(async () => {
+    const peerIdInput = $('#peerIdToSave').val().trim();
+    const peerNameInput = $('#peerNameToSave').val().trim();
+    const alertBox = $('#save-peer-alert');
+    alertBox.addClass('d-none').text('');
+
+    if (!peerIdInput || !peerNameInput) {
+      alertBox.text("Peer ID or Name cannot be empty").removeClass('d-none');
+      return;
+    }
+
+    // Ask for notification permission
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      alertBox.text("Notification permission denied. Cannot save Peer ID.")
+              .removeClass('d-none');
+      return;
+    }
+
+    // Save to localStorage
+    localStorage.setItem("peerIds", peerIdInput);
+    localStorage.setItem("peerName", peerNameInput);
+    alert(`Peer ID "${peerIdInput}" saved for notifications.`);
+
+    $('#savePeerModal').modal('hide');
+  });
+
+  $('#settingBtn').click(function(){
+      const savedPeers = localStorage.getItem("peerIds") || "";
+      const savedPeersName = localStorage.getItem("peerName") || "";
+      if(savedPeers){
+        $('#peerIdToSave').val(savedPeers);
+        $('#peerNameToSave').val(savedPeersName);
+      }
+  });
+  let hasPrompted = false;
+  let autoCheckInterval = setInterval(async () => {
+  if (isManuallyConnecting || hasPrompted) return;
+  const savedPeers = localStorage.getItem("peerIds") || "peer123";
+  const savedPeerName = localStorage.getItem("peerName") || "Anonymous";
+  if (!savedPeers) return;
+    const offer = await fetchSDP(savedPeers, "offer");
+    if (offer) {
+      // Show custom modal
+      hasPrompted = true; 
+      $('#autoJoinMessage').text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);
+      const autoJoinModal = new bootstrap.Modal(document.getElementById('autoJoinModal'));
+      autoJoinModal.show();
+
+      // Bind handler to Join button only once
+      $('#autoJoinConfirmBtn').off('click').on('click', () => {
+        autoJoinModal.hide();
+        setTimeout(() => {
+          isManuallyConnecting = true;
+          $('#peer-id').val(savedPeers);
+          $('#chat-username').val(savedPeerName);
+          $('#joinPeer').click(); // Trigger join
+        }, 300);
+      });
+
+      return; // Stop checking after first found match
+    }
+}, 3000); // every 3 seconds
+
+
 });
 
 async function startConnection(peerId) {
