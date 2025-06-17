@@ -226,23 +226,40 @@ $(document).ready(() => {
   if (!savedPeers) return;
     const offer = await fetchSDP(savedPeers, "offer");
     if (offer) {
+      if (Notification.permission === "granted" && document.visibilityState !== "visible") {
+        new Notification("Wavelite", {
+          body: `Peer "${savedPeers}" is requesting to connect.`,
+          icon: "/logo.png"
+        });
+      }else if (Notification.permission !== "denied") {
+        // Ask for permission only if not previously denied
+        Notification.requestPermission().then(permission => {
+          if (permission === "granted" && document.visibilityState !== "visible") {
+            new Notification("Wavelite", {
+              body: `Peer "${savedPeers}" is requesting to connect.`,
+              icon: "/logo.png"
+            });
+          }
+        });
+      }
       // Show custom modal
       hasPrompted = true; 
-      $('#autoJoinMessage').text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);
-      const autoJoinModal = new bootstrap.Modal(document.getElementById('autoJoinModal'));
-      autoJoinModal.show();
+      if (document.visibilityState === "visible") {
+        $('#autoJoinMessage').text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);
+        const autoJoinModal = new bootstrap.Modal(document.getElementById('autoJoinModal'));
+        autoJoinModal.show();
 
-      // Bind handler to Join button only once
-      $('#autoJoinConfirmBtn').off('click').on('click', () => {
-        autoJoinModal.hide();
-        setTimeout(() => {
-          isManuallyConnecting = true;
-          $('#peer-id').val(savedPeers);
-          $('#chat-username').val(savedPeerName);
-          $('#joinPeer').click(); // Trigger join
-        }, 300);
-      });
-
+        // Bind handler to Join button only once
+        $('#autoJoinConfirmBtn').off('click').on('click', () => {
+          autoJoinModal.hide();
+          setTimeout(() => {
+            isManuallyConnecting = true;
+            $('#peer-id').val(savedPeers);
+            $('#chat-username').val(savedPeerName);
+            $('#joinPeer').click(); // Trigger join
+          }, 300);
+        });
+      }
       return; // Stop checking after first found match
     }
 }, 3000); // every 3 seconds
