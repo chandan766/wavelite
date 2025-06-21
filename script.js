@@ -336,9 +336,15 @@ async function setupOfferer(peerId) {
       }
       const answerEntry = await fetchSDP(peerId, 'answer');
       if (answerEntry) {
-        console.log(`Answer SDP found for peerId: ${peerId}`);
-        clearInterval(pollingInterval);
-        await localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(answerEntry.sdp)));
+          console.log(`Answer SDP found for peerId: ${peerId}`);
+          clearInterval(pollingInterval);
+          try {
+            const sdp = JSON.parse(answerEntry.sdp);
+            await localConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+            console.log("✅ Remote description (answer) set successfully");
+          } catch (error) {
+            console.error("❌ Failed to set remote description (answer):", error);
+          }
       }
     }, 5000); // Polling interval 5 seconds
   } catch (error) {
@@ -358,19 +364,33 @@ async function setupAnswerer(offerEntry) {
   };
 
   try {
-    await localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerEntry.sdp)));
+    // Log and handle setRemoteDescription separately
+    console.log("Parsing and setting remote offer...");
+    const offerSDP = JSON.parse(offerEntry.sdp);
+    await localConnection.setRemoteDescription(new RTCSessionDescription(offerSDP));
+    console.log("✅ Remote description (offer) set successfully");
+
+    // Create and set local answer
+    console.log("Creating answer...");
     const answer = await localConnection.createAnswer();
     await localConnection.setLocalDescription(answer);
+    console.log("✅ Local answer set successfully");
+
+    // Wait for ICE to complete
     await waitForIceGathering(localConnection);
+
+    // Submit SDP
     console.log(`Submitting answer SDP for peerId: ${offerEntry.peerId}`);
     await submitSDP(offerEntry.peerId, 'answer', JSON.stringify(localConnection.localDescription));
+
   } catch (error) {
-    console.error('Error setting up answerer:', error);
+    console.error('❌ Error setting up answerer:', error);
     $('#peerIdSubmit').prop('disabled', false).text('Connect');
     $('#joinPeer').prop('disabled', false).text('Join');
     alert('Failed to establish connection. Please try again.');
   }
 }
+
 
 function createPeerConnection() {
   const pc = new RTCPeerConnection({
