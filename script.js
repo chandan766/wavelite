@@ -1,1 +1,783 @@
-const _0x27c4fa=_0x29f9;(function(_0x32bbf5,_0x3c3115){const _0x2df6db=_0x29f9,_0x4250fc=_0x32bbf5();while(!![]){try{const _0x51aaa0=-parseInt(_0x2df6db(0xd0))/0x1+-parseInt(_0x2df6db(0x198))/0x2*(-parseInt(_0x2df6db(0xcf))/0x3)+-parseInt(_0x2df6db(0xdb))/0x4*(parseInt(_0x2df6db(0x12f))/0x5)+-parseInt(_0x2df6db(0x18e))/0x6*(-parseInt(_0x2df6db(0xc8))/0x7)+-parseInt(_0x2df6db(0xbf))/0x8*(parseInt(_0x2df6db(0x142))/0x9)+-parseInt(_0x2df6db(0xe7))/0xa*(parseInt(_0x2df6db(0xc6))/0xb)+parseInt(_0x2df6db(0xdd))/0xc;if(_0x51aaa0===_0x3c3115)break;else _0x4250fc['push'](_0x4250fc['shift']());}catch(_0x20bd4b){_0x4250fc['push'](_0x4250fc['shift']());}}}(_0x4370,0x64295));const FORM_URL='https://docs.google.com/forms/u/0/d/e/1FAIpQLSej8F-WqVXrneoK1caUwagNb8EbcsLG7c2IWbgzlGIxd7xYAQ/formResponse',SHEET_URL=_0x27c4fa(0xdf),DELETE_URL=_0x27c4fa(0x187);let localConnection,dataChannel,pollingInterval,isManuallyConnecting=![],peerId=null;const CONNECTION_TIMEOUT=0x9c40,CHUNK_TIMEOUT=0x3a98,MAX_RETRIES=0x3,CHUNK_SIZE=0x10000,BUFFER_THRESHOLD=0x40000;let fileReader=new FileReader(),currentFile=null,currentChunk=0x0,totalChunks=0x0,retryCounts=new Map(),activeTransfers=new Map(),receivedFileInfo=null;$(document)[_0x27c4fa(0x18b)](()=>{const _0x55548c=_0x27c4fa;$(_0x55548c(0xf4))['click'](async function(_0x484699){const _0x143e95=_0x55548c;_0x484699[_0x143e95(0x1ab)](),isManuallyConnecting=!![];var _0x1d9794=$(_0x143e95(0xc2))['val']()[_0x143e95(0x12b)]();peerId=$(_0x143e95(0xcb))[_0x143e95(0xf9)]()[_0x143e95(0x12b)](),$('#name-error')[_0x143e95(0xd5)](''),$('#peer-error')['text']('');let _0x2c5b15=![];!_0x1d9794&&(_0x1d9794=_0x143e95(0xd2));!peerId&&(peerId='peer123');if(_0x2c5b15)return;$('#peerIdSubmit')[_0x143e95(0x119)]('disabled',!![])[_0x143e95(0xd5)]('Connecting...'),$('#joinPeer')['prop'](_0x143e95(0x1a4),!![])[_0x143e95(0xd5)](_0x143e95(0xdc)),$(_0x143e95(0x11a))[_0x143e95(0xf9)](peerId),startConnection(peerId);}),$(_0x55548c(0x146))['change'](_0x1e34e2=>{const _0x263ea6=_0x55548c,_0xdd98f0=_0x1e34e2['target'][_0x263ea6(0xfb)][0x0];_0xdd98f0?currentFile=_0xdd98f0:currentFile=null;}),$(_0x55548c(0xc4))[_0x55548c(0x11f)](()=>{const _0x304ef1=_0x55548c;if(!currentFile)$('#media-input')['click']();else{if(dataChannel&&dataChannel['readyState']==='open'){console[_0x304ef1(0x181)](_0x304ef1(0x18d),dataChannel['readyState']);const _0x1df610=$(_0x304ef1(0xc2))[_0x304ef1(0xf9)]()||_0x304ef1(0xd2),_0x2aed9f=Date[_0x304ef1(0xb9)]()['toString']();currentChunk=0x0,totalChunks=Math[_0x304ef1(0x17a)](currentFile[_0x304ef1(0x19e)]/CHUNK_SIZE),activeTransfers[_0x304ef1(0xae)](_0x2aed9f,{'file':currentFile,'fileName':currentFile[_0x304ef1(0x1a1)],'fileSize':currentFile[_0x304ef1(0x19e)],'fileType':currentFile['type']||_0x304ef1(0xe8),'totalChunks':totalChunks});const _0x3987ed={'type':_0x304ef1(0x10e),'name':_0x1df610,'messageId':_0x2aed9f,'fileName':currentFile[_0x304ef1(0x1a1)],'fileSize':currentFile[_0x304ef1(0x19e)],'fileType':currentFile['type']||'application/octet-stream'};try{dataChannel[_0x304ef1(0x149)](JSON[_0x304ef1(0x1a3)](_0x3987ed));const _0x4c410f=URL[_0x304ef1(0x116)](currentFile);displayMessage(_0x1df610,currentFile[_0x304ef1(0x1a1)],!![],_0x304ef1(0x10e),_0x4c410f,_0x2aed9f,_0x304ef1(0xec),_0x3987ed[_0x304ef1(0x10f)]),showProgressBar(_0x2aed9f,!![]),sendFileChunks(_0x2aed9f);}catch(_0x2a6888){console['error'](_0x304ef1(0x16a),_0x2a6888),hideProgressBar(_0x2aed9f),activeTransfers['delete'](_0x2aed9f),alert('Failed\x20to\x20send\x20file.\x20Please\x20try\x20again.');}}else console['warn'](_0x304ef1(0x13e),dataChannel?dataChannel[_0x304ef1(0x160)]:_0x304ef1(0x15a)),alert(_0x304ef1(0xac));}}),$(_0x55548c(0x1a9))[_0x55548c(0x11f)](()=>{const _0x23e42e=_0x55548c,_0x1b0b08=$(_0x23e42e(0xc2))['val']()||'Anonymous',_0x33f545=$(_0x23e42e(0x12e))[_0x23e42e(0xf9)](),_0xbd39ba=Date[_0x23e42e(0xb9)]()[_0x23e42e(0x117)]();if(_0x33f545&&dataChannel&&dataChannel['readyState']==='open'){console[_0x23e42e(0x181)](_0x23e42e(0x123),dataChannel[_0x23e42e(0x160)]);try{dataChannel['send'](JSON['stringify']({'type':_0x23e42e(0xd5),'name':_0x1b0b08,'message':_0x33f545,'messageId':_0xbd39ba})),displayMessage(_0x1b0b08,_0x33f545,!![],_0x23e42e(0xd5),null,_0xbd39ba,_0x23e42e(0xec)),$(_0x23e42e(0x12e))[_0x23e42e(0xf9)]('');}catch(_0x3f3d7d){console['error']('Error\x20sending\x20text\x20message:',_0x3f3d7d),alert(_0x23e42e(0xd8));}}else console[_0x23e42e(0x166)](_0x23e42e(0xd1),dataChannel?dataChannel['readyState']:'undefined'),alert(_0x23e42e(0x170));}),$(_0x55548c(0x17e))[_0x55548c(0x11f)](()=>{const _0x569a98=_0x55548c;fetch(DELETE_URL,{'method':_0x569a98(0xe1),'body':new URLSearchParams({'peerId':''})})[_0x569a98(0x124)](_0x2371da=>_0x2371da[_0x569a98(0xd5)]())['then'](_0x5b24f6=>alert(_0x569a98(0x168),_0x5b24f6))[_0x569a98(0x15b)](_0x49a38c=>alert('Error\x20deleting\x20SDP\x20entries:',_0x49a38c));}),$(_0x55548c(0x105))[_0x55548c(0x11f)](async function(_0x3cc998){const _0x33cc71=_0x55548c;_0x3cc998[_0x33cc71(0x1ab)](),isManuallyConnecting=!![];const _0x732826=$(_0x33cc71(0xc2))[_0x33cc71(0xf9)]()[_0x33cc71(0x12b)]();peerId=$(_0x33cc71(0xcb))[_0x33cc71(0xf9)]()[_0x33cc71(0x12b)](),$(_0x33cc71(0x158))[_0x33cc71(0xd5)](''),$('#peer-error')[_0x33cc71(0xd5)]('');let _0x21c168=![];!_0x732826&&($(_0x33cc71(0x158))[_0x33cc71(0xd5)](_0x33cc71(0xd4)),_0x21c168=!![]);!peerId&&($('#peer-error')[_0x33cc71(0xd5)](_0x33cc71(0x118)),_0x21c168=!![]);if(_0x21c168)return;$(_0x33cc71(0x105))[_0x33cc71(0x119)](_0x33cc71(0x1a4),!![])[_0x33cc71(0xd5)](_0x33cc71(0xde)),$('#peerIdSubmit')['prop']('disabled',!![])[_0x33cc71(0xd5)](_0x33cc71(0xab)),$(_0x33cc71(0x11a))[_0x33cc71(0xf9)](peerId),startJoinConnection(peerId);}),$(_0x55548c(0x1a6))[_0x55548c(0x11f)](async()=>{const _0x38c44d=_0x55548c,_0x5318d5=$(_0x38c44d(0x196))[_0x38c44d(0xf9)]()[_0x38c44d(0x12b)](),_0x54d447=$('#peerNameToSave')[_0x38c44d(0xf9)]()['trim'](),_0x5c0386=$(_0x38c44d(0x10a));_0x5c0386[_0x38c44d(0xf7)](_0x38c44d(0x18f))[_0x38c44d(0xd5)]('');if(!_0x5318d5||!_0x54d447){_0x5c0386[_0x38c44d(0xd5)]('Peer\x20ID\x20or\x20Name\x20cannot\x20be\x20empty')[_0x38c44d(0x137)]('d-none');return;}const _0x111d45=await Notification[_0x38c44d(0x12c)]();if(_0x111d45!==_0x38c44d(0x12d)){_0x5c0386[_0x38c44d(0xd5)](_0x38c44d(0x104))['removeClass']('d-none');return;}localStorage[_0x38c44d(0x109)](_0x38c44d(0x197),_0x5318d5),localStorage['setItem'](_0x38c44d(0x1aa),_0x54d447),alert(_0x38c44d(0x101)+_0x5318d5+_0x38c44d(0x110)),$(_0x38c44d(0x1a7))['modal'](_0x38c44d(0x13a));}),$(_0x55548c(0x193))['click'](function(){const _0x47347a=_0x55548c,_0x432b02=localStorage['getItem'](_0x47347a(0x197))||'',_0x52c7cc=localStorage[_0x47347a(0x172)](_0x47347a(0x1aa))||'';_0x432b02&&($(_0x47347a(0x196))[_0x47347a(0xf9)](_0x432b02),$(_0x47347a(0x164))[_0x47347a(0xf9)](_0x52c7cc));});let _0x202c86=![],_0x23012a=setInterval(async()=>{const _0x40551b=_0x55548c;if(isManuallyConnecting||_0x202c86)return;const _0x359b65=localStorage[_0x40551b(0x172)](_0x40551b(0x197))||_0x40551b(0xaa),_0xe9c307=localStorage[_0x40551b(0x172)](_0x40551b(0x1aa))||_0x40551b(0xd2);if(!_0x359b65)return;const _0x57cc21=await fetchSDP(_0x359b65,'offer');if(_0x57cc21){if(Notification[_0x40551b(0xfd)]==='granted'&&document[_0x40551b(0xad)]!==_0x40551b(0x15e)){const _0x3ca356=new Notification(_0x40551b(0xf3),{'body':_0x40551b(0xf5)+_0x359b65+_0x40551b(0x11d),'icon':'/logo.png'});_0x3ca356[_0x40551b(0x128)]=function(_0x342f6b){const _0x6e950d=_0x40551b;_0x342f6b[_0x6e950d(0x1ab)](),window[_0x6e950d(0xc5)](),$('#autoJoinMessage')[_0x6e950d(0xd5)]('Peer\x20\x22'+_0x359b65+_0x6e950d(0x11c));const _0x21d562=new bootstrap[(_0x6e950d(0x17b))](document[_0x6e950d(0x14a)](_0x6e950d(0xe0)));_0x21d562[_0x6e950d(0x126)](),$('#autoJoinConfirmBtn')[_0x6e950d(0xd3)](_0x6e950d(0x11f))['on'](_0x6e950d(0x11f),()=>{_0x21d562['hide'](),setTimeout(()=>{const _0x2b3ada=_0x29f9;isManuallyConnecting=!![],$(_0x2b3ada(0xcb))[_0x2b3ada(0xf9)](_0x359b65),$(_0x2b3ada(0xc2))[_0x2b3ada(0xf9)](_0xe9c307),$(_0x2b3ada(0x105))[_0x2b3ada(0x11f)]();},0x12c);});};}else Notification[_0x40551b(0xfd)]!=='denied'&&Notification['requestPermission']()[_0x40551b(0x124)](_0x2ab3b9=>{const _0x3a063d=_0x40551b;_0x2ab3b9===_0x3a063d(0x12d)&&document['visibilityState']!==_0x3a063d(0x15e)&&new Notification(_0x3a063d(0xf3),{'body':'Peer\x20\x22'+_0x359b65+_0x3a063d(0x11d),'icon':_0x3a063d(0x122)});});_0x202c86=!![];if(document[_0x40551b(0xad)]===_0x40551b(0x15e)){$(_0x40551b(0x152))[_0x40551b(0xd5)]('Peer\x20\x22'+_0x359b65+'\x22\x20is\x20requesting\x20to\x20connect.\x20Do\x20you\x20want\x20to\x20join?');const _0x1d85e4=new bootstrap['Modal'](document['getElementById'](_0x40551b(0xe0)));_0x1d85e4[_0x40551b(0x126)](),$(_0x40551b(0x103))[_0x40551b(0xd3)]('click')['on'](_0x40551b(0x11f),()=>{_0x1d85e4['hide'](),setTimeout(()=>{const _0x41e572=_0x29f9;isManuallyConnecting=!![],$(_0x41e572(0xcb))[_0x41e572(0xf9)](_0x359b65),$(_0x41e572(0xc2))['val'](_0xe9c307),$(_0x41e572(0x105))[_0x41e572(0x11f)]();},0x12c);});}return;}},0xbb8);});function _0x29f9(_0x8dd1fe,_0x5698ae){const _0x43702b=_0x4370();return _0x29f9=function(_0x29f9e4,_0x5ea1ec){_0x29f9e4=_0x29f9e4-0xa9;let _0x3a3cbd=_0x43702b[_0x29f9e4];return _0x3a3cbd;},_0x29f9(_0x8dd1fe,_0x5698ae);}async function startConnection(_0x1a0d1a){const _0x46fe18=_0x27c4fa;console[_0x46fe18(0x181)](_0x46fe18(0x16e)+_0x1a0d1a);const _0x1231ba=await fetchSDP(_0x1a0d1a,_0x46fe18(0x155));_0x1231ba?(console[_0x46fe18(0x181)](_0x46fe18(0xcd)),await setupAnswerer(_0x1231ba)):(console[_0x46fe18(0x181)](_0x46fe18(0x106)),await setupOfferer(_0x1a0d1a));}async function setupOfferer(_0x532acf){const _0x1a25d3=_0x27c4fa;localConnection=createPeerConnection(),dataChannel=localConnection[_0x1a25d3(0x169)](_0x1a25d3(0x175)),setupDataChannel(),$(_0x1a25d3(0xf4))['text'](_0x1a25d3(0xb1));try{const _0x533f52=await localConnection['createOffer']();await localConnection[_0x1a25d3(0x135)](_0x533f52),await waitForIceGathering(localConnection),console[_0x1a25d3(0x181)](_0x1a25d3(0x19a)+_0x532acf),await submitSDP(_0x532acf,_0x1a25d3(0x155),JSON[_0x1a25d3(0x1a3)](localConnection[_0x1a25d3(0xda)])),$('#peerIdSubmit')[_0x1a25d3(0xd5)]('Waiting\x20for\x20peer...');let _0xb9b95c=Date[_0x1a25d3(0xb9)]();pollingInterval=setInterval(async()=>{const _0x2217df=_0x1a25d3;if(Date[_0x2217df(0xb9)]()-_0xb9b95c>CONNECTION_TIMEOUT){clearInterval(pollingInterval),$('#peerIdSubmit')[_0x2217df(0x119)](_0x2217df(0x1a4),![])[_0x2217df(0xd5)](_0x2217df(0xab)),$(_0x2217df(0x105))['prop'](_0x2217df(0x1a4),![])[_0x2217df(0xd5)](_0x2217df(0xdc)),alert(_0x2217df(0x13b));return;}const _0x54f6b1=await fetchSDP(_0x532acf,_0x2217df(0x173));_0x54f6b1&&(console[_0x2217df(0x181)](_0x2217df(0x182)+_0x532acf),clearInterval(pollingInterval),await localConnection[_0x2217df(0xe6)](new RTCSessionDescription(JSON['parse'](_0x54f6b1[_0x2217df(0x14f)]))));},0x1388);}catch(_0xe11dd6){console[_0x1a25d3(0xb7)](_0x1a25d3(0x147),_0xe11dd6),$(_0x1a25d3(0xf4))[_0x1a25d3(0x119)](_0x1a25d3(0x1a4),![])[_0x1a25d3(0xd5)](_0x1a25d3(0xab)),$('#joinPeer')['prop'](_0x1a25d3(0x1a4),![])[_0x1a25d3(0xd5)]('Join'),alert(_0x1a25d3(0x17f));}}async function setupAnswerer(_0x529119){const _0x32f5a5=_0x27c4fa;localConnection=createPeerConnection(),localConnection[_0x32f5a5(0x188)]=_0x5e1224=>{dataChannel=_0x5e1224['channel'],setupDataChannel();};try{await localConnection[_0x32f5a5(0xe6)](new RTCSessionDescription(JSON[_0x32f5a5(0x132)](_0x529119['sdp'])));const _0x203145=await localConnection['createAnswer']();await localConnection['setLocalDescription'](_0x203145),await waitForIceGathering(localConnection),console[_0x32f5a5(0x181)](_0x32f5a5(0xb3)+_0x529119['peerId']),await submitSDP(_0x529119[_0x32f5a5(0x131)],'answer',JSON[_0x32f5a5(0x1a3)](localConnection['localDescription']));}catch(_0x10f025){console['error'](_0x32f5a5(0x1a8),_0x10f025),$(_0x32f5a5(0xf4))[_0x32f5a5(0x119)](_0x32f5a5(0x1a4),![])[_0x32f5a5(0xd5)](_0x32f5a5(0xab)),$('#joinPeer')[_0x32f5a5(0x119)](_0x32f5a5(0x1a4),![])['text']('Join'),alert(_0x32f5a5(0x17f));}}function createPeerConnection(){const _0x5d5d6a=_0x27c4fa,_0x2187df=new RTCPeerConnection({'iceServers':[{'urls':'stun:stun.l.google.com:19302'},{'urls':_0x5d5d6a(0x102)}],'iceCandidatePoolSize':0x0});return _0x2187df['oniceconnectionstatechange']=()=>{const _0x311e7f=_0x5d5d6a;console[_0x311e7f(0x181)](_0x311e7f(0xea),_0x2187df[_0x311e7f(0x133)]);},_0x2187df;}function waitForIceGathering(_0x1cd70f){const _0x4de872=_0x27c4fa;return $(_0x4de872(0xf4))[_0x4de872(0xd5)]('ICE\x20Gathering...'),new Promise(_0x59c03c=>{const _0x3cc06b=_0x4de872;if(_0x1cd70f[_0x3cc06b(0xb8)]==='complete')return _0x59c03c();const _0x25f181=()=>{const _0x86ad8c=_0x3cc06b;_0x1cd70f['iceGatheringState']==='complete'&&(_0x1cd70f[_0x86ad8c(0x138)](_0x86ad8c(0xf2),_0x25f181),_0x59c03c());};_0x1cd70f[_0x3cc06b(0xbb)](_0x3cc06b(0xf2),_0x25f181);});}function _0x4370(){const _0x3a584f=['application/octet-stream','totalChunks','ICE\x20connection\x20state:','scrollTop','sent','entry.479288741','type','startsWith','<audio\x20controls\x20src=\x22','slice','icegatheringstatechange','Wavelite','#peerIdSubmit','Peer\x20\x22','Resent\x20file\x20chunk\x20','addClass','Data\x20channel\x20opened\x20for\x20peerId:','val','Error\x20resending\x20file\x20chunk\x20','files','2-digit','permission','#chat-display','FileReader\x20error\x20for\x20messageId:','find','Peer\x20ID\x20\x22','stun:stun1.l.google.com:19302','#autoJoinConfirmBtn','Notification\x20permission\x20denied.\x20Cannot\x20save\x20Peer\x20ID.','#joinPeer','No\x20offer\x20found,\x20acting\x20as\x20offerer','<a\x20href=\x22','round','setItem','#save-peer-alert','Error\x20submitting\x20','Disconnect','Starting\x20join\x20connection\x20for\x20peerId:\x20','file','fileType','\x22\x20saved\x20for\x20notifications.','Sent\x20file\x20chunk\x20','Deleted\x20SDP\x20for\x20peerId:','\x20SDP\x20for\x20peerId:\x20','onload','messageId','createObjectURL','toString','Peer\x20ID\x20is\x20required','prop','#peerId','Failed\x20to\x20receive\x20all\x20chunks\x20for\x20','\x22\x20is\x20requesting\x20to\x20connect.\x20Do\x20you\x20want\x20to\x20join?','\x22\x20is\x20requesting\x20to\x20connect.','remove','click','attr','Offer\x20Submitted','/logo.png','Sending\x20text\x20message,\x20dataChannel\x20state:','then','message','show',',\x20reconstructing\x20file','onclick','width','\x20.progress-bar','trim','requestPermission','granted','#chat-message','1095cdevOO','scrollHeight','peerId','parse','iceConnectionState','Failed\x20to\x20read\x20file\x20chunk.\x20Please\x20try\x20again.','setLocalDescription','\x20bytes),\x20waiting\x20for\x20messageId:\x20','removeClass','removeEventListener','Failed\x20to\x20join\x20connection.\x20Please\x20try\x20again.','hide','Connection\x20timed\x20out.\x20Please\x20try\x20again\x20or\x20check\x20peer\x20ID.','Offer\x20SDP\x20found\x20for\x20peerId:\x20','\x20for\x20','Cannot\x20send\x20file,\x20dataChannel\x20state:','Delete\x20error\x20for\x20peerId:',',\x20expected:\x20','Submitting\x20Offer...','306PpiajD',',\x20total\x20bytes:\x20','self','data','#media-input','Error\x20setting\x20up\x20offerer:','toLocaleTimeString','send','getElementById','<span\x20class=\x22status-icon\x20text-muted\x20ms-2\x22><i\x20class=\x22fas\x20fa-check-double\x22></i></span>','fileSize',',\x20size:\x20','aria-valuenow','sdp','Received\x20file\x20chunk\x20','No\x20offer\x20SDP\x20found\x20yet\x20for\x20peerId:\x20','#autoJoinMessage','append','hasClass','offer','Buffer\x20full\x20(','#chat-section','#name-error','table','undefined','catch','fileName','Received\x20resend\x20request\x20for\x20messageId:\x20','visible','peerId\x20is\x20undefined\x20in\x20setupDataChannel','readyState','\x20bytes),\x20retrying\x20for\x20messageId:\x20','Requesting\x20resend\x20for\x20','<div\x20class=\x22file-name\x22\x20style=\x22font-size:\x2013px;\x20font-weight:\x20500;\x22>','#peerNameToSave',',\x20type:\x20','warn','none','Deleted\x20all\x20SDP\x20entries:','createDataChannel','Error\x20sending\x20file:',':\x20File\x20or\x20chunk\x20out\x20of\x20range','length','All\x20chunks\x20received\x20for\x20','Starting\x20connection\x20for\x20peerId:\x20','</span>','Please\x20wait\x20until\x20the\x20connection\x20is\x20established\x20before\x20sending\x20a\x20message.','Received\x20file\x20metadata\x20for\x20','getItem','answer','min','chat','d-flex','result','\x22\x20class=\x22img-fluid\x20rounded\x20mt-2\x22\x20style=\x22width:\x20100%;\x20height:\x20auto;\x20object-fit:\x20contain;\x22\x20/>\x0a\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20<br>','FileReader\x20error\x20during\x20resend\x20for\x20messageId:\x20','ceil','Modal','reduce','Buffer\x20full\x20during\x20resend\x20(','#delete-all-btn','Failed\x20to\x20establish\x20connection.\x20Please\x20try\x20again.','</div>\x0a\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22message-meta\x20d-flex\x20justify-content-end\x20border-top\x20border-secondary\x20mt-2\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22timestamp\x20text-end\x22\x20style=\x22font-size:10px;\x22>','log','Answer\x20SDP\x20found\x20for\x20peerId:\x20','#progress-','substring','push','Max\x20retries\x20reached\x20for\x20','https://script.google.com/macros/s/AKfycbyNUCRo3JKNk_bVq9VcdpbICGuBiTytBGRAjFr7VDrHVvG6TMxaA195sBSSBOeiR1DG/exec','ondatachannel','entry.443244439','\x22\x20class=\x22btn\x20btn-sm\x20btn-secondary\x20ms-1\x22><i\x20class=\x22fas\x20fa-download\x22></i></a>','ready','resend_request','Sending\x20file,\x20dataChannel\x20state:','144kNwmDE','d-none','No\x20','Failed\x20to\x20reconstruct\x20received\x20file.\x20Please\x20try\x20again.','delete','#settingBtn','<span\x20class=\x22name\x22\x20style=\x22font-size:12px;\x22>','Error\x20during\x20join\x20connection:','#peerIdToSave','peerIds','312160OtKJEf','\x20for\x20messageId\x20','Submitting\x20offer\x20SDP\x20for\x20peerId:\x20','<video\x20controls\x20src=\x22','byteLength','peerId\x20is\x20undefined\x20in\x20deletePeerFromSheet','size','\x0a\x20\x20\x20\x20\x20\x20<div\x20class=\x22image-wrapper\x22\x20style=\x22max-width:\x20100%;\x20overflow:\x20hidden;\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20<img\x20src=\x22','onerror','name',',\x20chunk:\x20','stringify','disabled','Error\x20displaying\x20message\x20for\x20','#confirmSavePeerBtn','#savePeerModal','Error\x20setting\x20up\x20answerer:','#btn-send-text','peerName','preventDefault','Data\x20channel\x20error:','peer123','Connect','Please\x20wait\x20until\x20the\x20connection\x20is\x20established\x20before\x20sending\x20a\x20file.','visibilityState','set','css','entry.1244760702','Offer\x20Creating...','delivered','Submitting\x20answer\x20SDP\x20for\x20peerId:\x20','audio/','\x22>\x0a\x20\x20\x20\x20\x20\x20<div\x20class=\x22file-name\x20mt-2\x22\x20style=\x22font-size:\x2014px;\x20font-weight:\x20500;\x22>','value','error','iceGatheringState','now','onmessage','addEventListener','Failed\x20to\x20send\x20file\x20chunk.\x20Please\x20try\x20again.','bufferedAmount','Error\x20reconstructing\x20file\x20','101704spcSzi','\x22\x20class=\x22mt-2\x22\x20style=\x22width:\x20100%;\x20max-width:\x20300px;\x22></audio><br>','chunkIndex','#chat-username','other','#btn-send-media','focus','55oGbvsy',',\x20proceeding\x20as\x20answerer','51149msaunA','get','Connected','#peer-id','Failed\x20to\x20display\x20message\x20in\x20UI.\x20Please\x20refresh\x20the\x20page.','Offer\x20found,\x20acting\x20as\x20answerer','\x20SDP\x20found\x20for\x20peerId:\x20','6PnuMmj','697033OxHQBc','Cannot\x20send\x20text,\x20dataChannel\x20state:','Anonymous','off','Name\x20is\x20required','text','rows','.progress-percentage','Failed\x20to\x20send\x20message.\x20Please\x20try\x20again.','Error\x20sending\x20file\x20chunk\x20for\x20messageId:','localDescription','1960tObhkU','Join','16698996roovUg','Joining...','https://docs.google.com/spreadsheets/d/1oQ7TEJLutMpXo4gi75jTOmlBGPBHlF3ekE0mtA3nK_M/gviz/tq?tqx=out:json','autoJoinModal','POST','Data\x20channel\x20error\x20occurred.\x20Please\x20reconnect\x20and\x20try\x20again.','image/','Transitioned\x20to\x20chat\x20UI','\x0a\x20\x20\x20\x20\x20\x20<div\x20class=\x22chat-message\x20','setRemoteDescription','464530iAXRMu'];_0x4370=function(){return _0x3a584f;};return _0x4370();}async function submitSDP(_0xf1fc69,_0x2525a6,_0x3ce6f8){const _0x2fc6fc=_0x27c4fa;$(_0x2fc6fc(0xf4))[_0x2fc6fc(0xd5)](_0x2fc6fc(0x141));const _0x9eeff4=new FormData();_0x9eeff4[_0x2fc6fc(0x153)](_0x2fc6fc(0xb0),_0xf1fc69),_0x9eeff4['append'](_0x2fc6fc(0x189),_0x2525a6),_0x9eeff4[_0x2fc6fc(0x153)](_0x2fc6fc(0xed),_0x3ce6f8);try{await fetch(FORM_URL,{'method':_0x2fc6fc(0xe1),'mode':'no-cors','body':_0x9eeff4}),console[_0x2fc6fc(0x181)]('Submitted\x20'+_0x2525a6+'\x20SDP\x20for\x20peerId:\x20'+_0xf1fc69),$(_0x2fc6fc(0xf4))['text'](_0x2fc6fc(0x121));}catch(_0xa0069d){console[_0x2fc6fc(0xb7)](_0x2fc6fc(0x10b)+_0x2525a6+'\x20SDP:',_0xa0069d);throw _0xa0069d;}}async function fetchSDP(_0x530872,_0x6e306){const _0x1cc575=_0x27c4fa;try{const _0x29b685=await fetch(SHEET_URL),_0x598891=await _0x29b685[_0x1cc575(0xd5)](),_0x390c8d=JSON[_0x1cc575(0x132)](_0x598891[_0x1cc575(0x184)](0x2f)[_0x1cc575(0xf1)](0x0,-0x2)),_0x785b83=_0x390c8d[_0x1cc575(0x159)][_0x1cc575(0xd6)];for(let _0xf8dc12 of _0x785b83){const _0x2dde3c=_0xf8dc12['c'][0x1]?.['v'],_0x1129f3=_0xf8dc12['c'][0x2]?.['v'],_0x20a905=_0xf8dc12['c'][0x3]?.['v'];if(_0x2dde3c==_0x530872&&_0x1129f3==_0x6e306&&_0x20a905)return console[_0x1cc575(0x181)]('Found\x20'+_0x6e306+_0x1cc575(0x113)+_0x2dde3c),{'peerId':_0x2dde3c,'role':_0x1129f3,'sdp':_0x20a905};}return console[_0x1cc575(0x181)](_0x1cc575(0x190)+_0x6e306+_0x1cc575(0xce)+_0x530872),null;}catch(_0x2a836f){return console[_0x1cc575(0xb7)]('Failed\x20to\x20fetch\x20'+_0x6e306+_0x1cc575(0x113)+_0x530872+':',_0x2a836f),null;}}function setupDataChannel(){const _0x183a03=_0x27c4fa;let _0x1910db=[],_0x532f28=null,_0x3c27cc=null,_0x256415=0x0;if(!peerId){console[_0x183a03(0xb7)](_0x183a03(0x15f));return;}dataChannel['onopen']=()=>{const _0x25eebd=_0x183a03;console['log'](_0x25eebd(0xf8),peerId),deletePeerFromSheet(peerId),transitionToChat();},dataChannel[_0x183a03(0xba)]=_0x2e9df5=>{const _0xa49724=_0x183a03;if(_0x2e9df5[_0xa49724(0x145)]instanceof ArrayBuffer){if(receivedFileInfo){_0x1910db[_0xa49724(0x185)](_0x2e9df5[_0xa49724(0x145)]),_0x532f28=Date[_0xa49724(0xb9)](),_0x256415++;const _0x11234b=_0x1910db[_0xa49724(0x17c)]((_0x1dc783,_0x567a8e)=>_0x1dc783+_0x567a8e[_0xa49724(0x19c)],0x0);console[_0xa49724(0x181)](_0xa49724(0x150)+_0x1910db[_0xa49724(0x16c)]+'/'+Math[_0xa49724(0x17a)](receivedFileInfo[_0xa49724(0x14c)]/CHUNK_SIZE)+_0xa49724(0x13d)+receivedFileInfo[_0xa49724(0x15c)]+_0xa49724(0x143)+_0x11234b+_0xa49724(0x140)+receivedFileInfo[_0xa49724(0x14c)]),updateProgressBar(receivedFileInfo['messageId'],_0x11234b/receivedFileInfo[_0xa49724(0x14c)]*0x64);if(_0x11234b>=receivedFileInfo[_0xa49724(0x14c)]){console[_0xa49724(0x181)](_0xa49724(0x16d)+receivedFileInfo[_0xa49724(0x15c)]+_0xa49724(0x127)),clearTimeout(_0x3c27cc);try{const _0x2b3de8=new Blob(_0x1910db,{'type':receivedFileInfo['fileType']||_0xa49724(0xe8)}),_0x536c4d=URL[_0xa49724(0x116)](_0x2b3de8);displayMessage(receivedFileInfo[_0xa49724(0x1a1)],receivedFileInfo['fileName'],![],_0xa49724(0x10e),_0x536c4d,receivedFileInfo[_0xa49724(0x115)],_0xa49724(0xb2),receivedFileInfo['fileType']),hideProgressBar(receivedFileInfo['messageId']),_0x1910db=[],receivedFileInfo=null,_0x256415=0x0,retryCounts[_0xa49724(0x192)](receivedFileInfo?.[_0xa49724(0x115)]);}catch(_0x4437f8){console[_0xa49724(0xb7)](_0xa49724(0xbe)+receivedFileInfo[_0xa49724(0x15c)]+':',_0x4437f8),hideProgressBar(receivedFileInfo['messageId']),alert(_0xa49724(0x191)),_0x1910db=[],receivedFileInfo=null,_0x256415=0x0,retryCounts[_0xa49724(0x192)](receivedFileInfo?.[_0xa49724(0x115)]);}}else clearTimeout(_0x3c27cc),_0x3c27cc=setTimeout(()=>{const _0x2a8e70=_0xa49724;if(receivedFileInfo&&_0x11234b<receivedFileInfo[_0x2a8e70(0x14c)]){const _0x46189a=retryCounts[_0x2a8e70(0xc9)](receivedFileInfo[_0x2a8e70(0x115)])||0x0;_0x46189a<MAX_RETRIES?(console[_0x2a8e70(0x181)](_0x2a8e70(0x162)+receivedFileInfo[_0x2a8e70(0x15c)]+',\x20received:\x20'+_0x11234b+_0x2a8e70(0x140)+receivedFileInfo[_0x2a8e70(0x14c)]+_0x2a8e70(0x1a2)+_0x256415),retryCounts['set'](receivedFileInfo[_0x2a8e70(0x115)],_0x46189a+0x1),dataChannel['send'](JSON['stringify']({'type':_0x2a8e70(0x18c),'messageId':receivedFileInfo['messageId'],'chunkIndex':_0x256415})),_0x532f28=Date[_0x2a8e70(0xb9)]()):(console[_0x2a8e70(0xb7)](_0x2a8e70(0x186)+receivedFileInfo[_0x2a8e70(0x15c)]+',\x20received:\x20'+_0x11234b+_0x2a8e70(0x140)+receivedFileInfo[_0x2a8e70(0x14c)]),hideProgressBar(receivedFileInfo[_0x2a8e70(0x115)]),alert(_0x2a8e70(0x11b)+receivedFileInfo[_0x2a8e70(0x15c)]+'\x20after\x20'+MAX_RETRIES+'\x20retries.\x20Please\x20try\x20again.'),_0x1910db=[],receivedFileInfo=null,_0x256415=0x0,retryCounts[_0x2a8e70(0x192)](receivedFileInfo[_0x2a8e70(0x115)]));}},CHUNK_TIMEOUT);}}else{const _0x53586d=JSON[_0xa49724(0x132)](_0x2e9df5[_0xa49724(0x145)]);if(_0x53586d[_0xa49724(0xee)]==='text')displayMessage(_0x53586d[_0xa49724(0x1a1)],_0x53586d[_0xa49724(0x125)],![],_0xa49724(0xd5),null,_0x53586d[_0xa49724(0x115)],_0xa49724(0xb2));else{if(_0x53586d[_0xa49724(0xee)]===_0xa49724(0x10e))receivedFileInfo={'name':_0x53586d['name'],'messageId':_0x53586d['messageId'],'fileName':_0x53586d[_0xa49724(0x15c)],'fileSize':_0x53586d['fileSize'],'fileType':_0x53586d['fileType']},_0x1910db=[],_0x532f28=Date[_0xa49724(0xb9)](),_0x256415=0x0,console[_0xa49724(0x181)](_0xa49724(0x171)+_0x53586d[_0xa49724(0x15c)]+_0xa49724(0x14d)+_0x53586d[_0xa49724(0x14c)]+_0xa49724(0x165)+_0x53586d[_0xa49724(0x10f)]),showProgressBar(_0x53586d[_0xa49724(0x115)],![]);else _0x53586d[_0xa49724(0xee)]===_0xa49724(0x18c)&&(console['log'](_0xa49724(0x15d)+_0x53586d[_0xa49724(0x115)]+',\x20chunk:\x20'+_0x53586d[_0xa49724(0xc1)]),resendFileChunk(_0x53586d[_0xa49724(0x115)],_0x53586d[_0xa49724(0xc1)]));}}},dataChannel['onerror']=_0x22c691=>{const _0x5e0b41=_0x183a03;console['error'](_0x5e0b41(0xa9),_0x22c691),receivedFileInfo?(hideProgressBar(receivedFileInfo[_0x5e0b41(0x115)]),alert('Data\x20channel\x20error\x20during\x20transfer\x20of\x20'+receivedFileInfo[_0x5e0b41(0x15c)]+'.\x20Please\x20reconnect\x20and\x20try\x20again.'),_0x1910db=[],receivedFileInfo=null,_0x256415=0x0,clearTimeout(_0x3c27cc),retryCounts[_0x5e0b41(0x192)](receivedFileInfo[_0x5e0b41(0x115)])):alert(_0x5e0b41(0xe2));};}function sendFileChunks(_0x289553){const _0x3e381f=_0x27c4fa,_0x38ef70=activeTransfers['get'](_0x289553);if(!_0x38ef70||currentChunk*CHUNK_SIZE>=_0x38ef70[_0x3e381f(0x14c)]){console[_0x3e381f(0x181)]('File\x20sending\x20completed\x20for\x20messageId:',_0x289553),$(_0x3e381f(0x146))[_0x3e381f(0xf9)](''),document['getElementById']('media-input')[_0x3e381f(0xb6)]='',currentFile=null,currentChunk=0x0,totalChunks=0x0,hideProgressBar(_0x289553),activeTransfers[_0x3e381f(0x192)](_0x289553),retryCounts[_0x3e381f(0x192)](_0x289553);return;}if(dataChannel['bufferedAmount']>BUFFER_THRESHOLD){console['log'](_0x3e381f(0x156)+dataChannel[_0x3e381f(0xbd)]+_0x3e381f(0x136)+_0x289553),setTimeout(()=>sendFileChunks(_0x289553),0xc8);return;}const _0xe5db2b=currentChunk*CHUNK_SIZE,_0x5b560e=Math[_0x3e381f(0x174)](_0xe5db2b+CHUNK_SIZE,_0x38ef70['fileSize']);fileReader[_0x3e381f(0x114)]=()=>{const _0x36523f=_0x3e381f;try{dataChannel[_0x36523f(0x149)](fileReader['result']),console[_0x36523f(0x181)](_0x36523f(0x111)+(currentChunk+0x1)+'/'+_0x38ef70[_0x36523f(0xe9)]+'\x20for\x20messageId:\x20'+_0x289553),currentChunk++,updateProgressBar(_0x289553,currentChunk/_0x38ef70[_0x36523f(0xe9)]*0x64),setTimeout(()=>sendFileChunks(_0x289553),0xa);}catch(_0x360479){console[_0x36523f(0xb7)](_0x36523f(0xd9),_0x289553,_0x360479),hideProgressBar(_0x289553),activeTransfers[_0x36523f(0x192)](_0x289553),alert(_0x36523f(0xbc)),retryCounts['delete'](_0x289553);throw _0x360479;}},fileReader['onerror']=()=>{const _0x1e1095=_0x3e381f;console[_0x1e1095(0xb7)](_0x1e1095(0xff),_0x289553),hideProgressBar(_0x289553),activeTransfers[_0x1e1095(0x192)](_0x289553),alert(_0x1e1095(0x134)),retryCounts[_0x1e1095(0x192)](_0x289553);};const _0x21cf25=_0x38ef70[_0x3e381f(0x10e)]['slice'](_0xe5db2b,_0x5b560e);fileReader['readAsArrayBuffer'](_0x21cf25);}function resendFileChunk(_0x29cb05,_0x309ed1){const _0x14ae94=_0x27c4fa,_0x75795f=activeTransfers['get'](_0x29cb05);if(!_0x75795f||_0x309ed1*CHUNK_SIZE>=_0x75795f[_0x14ae94(0x14c)]){console[_0x14ae94(0x166)]('Cannot\x20resend\x20chunk\x20'+_0x309ed1+_0x14ae94(0x199)+_0x29cb05+_0x14ae94(0x16b));return;}if(dataChannel[_0x14ae94(0xbd)]>BUFFER_THRESHOLD){console[_0x14ae94(0x181)](_0x14ae94(0x17d)+dataChannel['bufferedAmount']+_0x14ae94(0x161)+_0x29cb05),setTimeout(()=>resendFileChunk(_0x29cb05,_0x309ed1),0xc8);return;}const _0x5b56a4=_0x309ed1*CHUNK_SIZE,_0x1e93f1=Math[_0x14ae94(0x174)](_0x5b56a4+CHUNK_SIZE,_0x75795f[_0x14ae94(0x14c)]);fileReader[_0x14ae94(0x114)]=()=>{const _0x5253b9=_0x14ae94;try{dataChannel['send'](fileReader[_0x5253b9(0x177)]),console['log'](_0x5253b9(0xf6)+(_0x309ed1+0x1)+'/'+_0x75795f[_0x5253b9(0xe9)]+_0x5253b9(0x199)+_0x29cb05);}catch(_0x45d158){console[_0x5253b9(0xb7)](_0x5253b9(0xfa)+_0x309ed1+_0x5253b9(0x199)+_0x29cb05+':',_0x45d158);}},fileReader[_0x14ae94(0x1a0)]=()=>{const _0x42dccf=_0x14ae94;console['error'](_0x42dccf(0x179)+_0x29cb05);};const _0x1da187=_0x75795f[_0x14ae94(0x10e)]['slice'](_0x5b56a4,_0x1e93f1);fileReader['readAsArrayBuffer'](_0x1da187);}function showProgressBar(_0x21140f,_0x5f0c9a){const _0x3d22fd=_0x27c4fa,_0x3b6bc0=_0x5f0c9a?_0x3d22fd(0x144):_0x3d22fd(0xc3),_0xfb08c0=_0x5f0c9a?activeTransfers[_0x3d22fd(0xc9)](_0x21140f)?.[_0x3d22fd(0x15c)]||'Unknown\x20File':receivedFileInfo?.[_0x3d22fd(0x15c)]||'Unknown\x20File';$(_0x3d22fd(0xfe))['append']('\x0a\x20\x20\x20\x20<div\x20class=\x22chat-message\x20'+_0x3b6bc0+'\x20px-3\x22\x20id=\x22progress-'+_0x21140f+_0x3d22fd(0xb5)+_0xfb08c0+'</div>\x0a\x20\x20\x20\x20\x20\x20<div\x20class=\x22progress\x20mt-2\x22\x20style=\x22height:\x2030px;\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22progress-bar\x20progress-bar-striped\x20progress-bar-animated\x20bg-info\x22\x20\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20role=\x22progressbar\x22\x20\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20style=\x22width:\x200%;\x20font-size:\x2016px;\x20line-height:\x2030px;\x22\x20\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20aria-valuenow=\x220\x22\x20\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20aria-valuemin=\x220\x22\x20\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20aria-valuemax=\x22100\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20\x20<span\x20class=\x22progress-percentage\x22>0%</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20</div>\x0a\x20\x20'),$(_0x3d22fd(0xfe))[_0x3d22fd(0xeb)]($(_0x3d22fd(0xfe))[0x0][_0x3d22fd(0x130)]);}function updateProgressBar(_0x37f40d,_0x5a79e7){const _0x5e1772=_0x27c4fa,_0xca6b38=Math[_0x5e1772(0x174)](0x64,Math[_0x5e1772(0x108)](_0x5a79e7));$(_0x5e1772(0x183)+_0x37f40d+_0x5e1772(0x12a))[_0x5e1772(0xaf)](_0x5e1772(0x129),_0xca6b38+'%')[_0x5e1772(0x120)](_0x5e1772(0x14e),_0xca6b38)[_0x5e1772(0x100)](_0x5e1772(0xd7))[_0x5e1772(0xd5)](_0xca6b38+'%');}function hideProgressBar(_0x1c78c4){const _0x117d21=_0x27c4fa;$(_0x117d21(0x183)+_0x1c78c4)[_0x117d21(0x11e)]();}function transitionToChat(){const _0x33545b=_0x27c4fa;$('#chat-section')[_0x33545b(0x154)]('d-none')&&($('#login-section')[_0x33545b(0x137)](_0x33545b(0x176))[_0x33545b(0xf7)](_0x33545b(0x18f)),$(_0x33545b(0x157))['removeClass']('d-none'),$('#peerIdSubmit')[_0x33545b(0x119)]('disabled',![])['text'](_0x33545b(0x10c)),console['log'](_0x33545b(0xe4)));}function displayMessage(_0x2478f5,_0x4a8152,_0xbff288,_0x5b337b,_0x325e72,_0x11b019,_0x48788d,_0x37f2b8=null){const _0x1b3a0f=_0x27c4fa,_0x335cd0=_0xbff288?'self':'other',_0x42734f=_0xbff288?_0x1b3a0f(0x14b):'',_0x50ac0d=new Date()[_0x1b3a0f(0x148)]([],{'hour':_0x1b3a0f(0xfc),'minute':_0x1b3a0f(0xfc)});let _0x3907c4=_0x4a8152;if(_0x5b337b===_0x1b3a0f(0x10e)&&_0x325e72){const _0x501b9b=_0x37f2b8&&_0x37f2b8[_0x1b3a0f(0xef)](_0x1b3a0f(0xe3)),_0x18b965=_0x37f2b8&&_0x37f2b8['startsWith'](_0x1b3a0f(0xb4)),_0x3e5ce7=_0x37f2b8&&_0x37f2b8[_0x1b3a0f(0xef)]('video/'),_0x4cd011=_0x1b3a0f(0x107)+_0x325e72+'\x22\x20download=\x22'+_0x4a8152+_0x1b3a0f(0x18a),_0x587483=_0x1b3a0f(0x163)+_0x4a8152+'</div>';if(_0x501b9b)_0x3907c4=_0x1b3a0f(0x19f)+_0x325e72+'\x22\x20alt=\x22'+_0x4a8152+_0x1b3a0f(0x178)+_0x587483+'\x20'+_0x4cd011;else{if(_0x18b965)_0x3907c4=_0x1b3a0f(0xf0)+_0x325e72+_0x1b3a0f(0xc0)+_0x587483+'\x20'+_0x4cd011;else _0x3e5ce7?_0x3907c4=_0x1b3a0f(0x19b)+_0x325e72+'\x22\x20class=\x22mt-2\x22\x20style=\x22max-width:\x20300px;\x20max-height:\x20250px;\x20object-fit:\x20contain;\x22\x20class=\x22img-fluid\x20rounded\x22></video><br>'+_0x587483+'\x20'+_0x4cd011:_0x3907c4=''+_0x587483+_0x4cd011;}}try{$('#chat-display')['append'](_0x1b3a0f(0xe5)+_0x335cd0+'\x20px-3\x22>\x0a\x20\x20\x20\x20\x20\x20\x20\x20<div\x20class=\x22message\x20py-1\x22\x20style=\x22font-size:12px;font-weight:450;\x22>'+_0x3907c4+_0x1b3a0f(0x180)+(_0xbff288?'':_0x1b3a0f(0x194)+_0x2478f5+_0x1b3a0f(0x16f))+'\x20'+_0x50ac0d+'\x20'+_0x42734f+'</span>\x0a\x20\x20\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20\x20\x20</div>\x0a\x20\x20\x20\x20'),$(_0x1b3a0f(0xfe))[_0x1b3a0f(0xeb)]($(_0x1b3a0f(0xfe))[0x0][_0x1b3a0f(0x130)]),console[_0x1b3a0f(0x181)]('Displayed\x20message\x20for\x20'+_0x5b337b+':\x20'+_0x4a8152+',\x20fileType:\x20'+(_0x37f2b8||_0x1b3a0f(0x167)));}catch(_0x372efb){console[_0x1b3a0f(0xb7)](_0x1b3a0f(0x1a5)+_0x4a8152+':',_0x372efb),alert(_0x1b3a0f(0xcc));}}function deletePeerFromSheet(_0x13811f){const _0x51f813=_0x27c4fa;if(!_0x13811f){console[_0x51f813(0xb7)](_0x51f813(0x19d));return;}fetch(DELETE_URL,{'method':'POST','body':new URLSearchParams({'peerId':_0x13811f})})[_0x51f813(0x124)](_0x5382dc=>_0x5382dc[_0x51f813(0xd5)]())[_0x51f813(0x124)](_0x489eb8=>console['log'](_0x51f813(0x112),_0x13811f,_0x489eb8))['catch'](_0x1d7be9=>console[_0x51f813(0xb7)](_0x51f813(0x13f),_0x13811f,_0x1d7be9));}async function startJoinConnection(_0x10a3d0){const _0x57fbf8=_0x27c4fa;console[_0x57fbf8(0x181)](_0x57fbf8(0x10d)+_0x10a3d0),$(_0x57fbf8(0x105))[_0x57fbf8(0xd5)]('Waiting\x20for\x20offer...');let _0x1a91fe=Date['now']();pollingInterval=setInterval(async()=>{const _0x55b03e=_0x57fbf8;if(Date[_0x55b03e(0xb9)]()-_0x1a91fe>CONNECTION_TIMEOUT){clearInterval(pollingInterval),$(_0x55b03e(0x105))[_0x55b03e(0x119)](_0x55b03e(0x1a4),![])[_0x55b03e(0xd5)](_0x55b03e(0xdc)),$(_0x55b03e(0xf4))[_0x55b03e(0x119)](_0x55b03e(0x1a4),![])[_0x55b03e(0xd5)](_0x55b03e(0xab)),alert('No\x20offer\x20found.\x20Please\x20try\x20again\x20or\x20check\x20peer\x20ID.');return;}const _0x132bb0=await fetchSDP(_0x10a3d0,_0x55b03e(0x155));if(_0x132bb0){console[_0x55b03e(0x181)](_0x55b03e(0x13c)+_0x10a3d0+_0x55b03e(0xc7)),clearInterval(pollingInterval);try{await setupAnswerer(_0x132bb0),$('#joinPeer')[_0x55b03e(0xd5)](_0x55b03e(0xca));}catch(_0x5144ff){console[_0x55b03e(0xb7)](_0x55b03e(0x195),_0x5144ff),$('#joinPeer')[_0x55b03e(0x119)](_0x55b03e(0x1a4),![])[_0x55b03e(0xd5)](_0x55b03e(0xdc)),$(_0x55b03e(0xf4))[_0x55b03e(0x119)](_0x55b03e(0x1a4),![])['text']('Connect'),alert(_0x55b03e(0x139));}}else console[_0x55b03e(0x181)](_0x55b03e(0x151)+_0x10a3d0);},0xbb8);}
+// --- Config ---
+const FORM_URL = "https://docs.google.com/forms/u/0/d/e/1FAIpQLSej8F-WqVXrneoK1caUwagNb8EbcsLG7c2IWbgzlGIxd7xYAQ/formResponse";
+const SHEET_URL = "https://docs.google.com/spreadsheets/d/1oQ7TEJLutMpXo4gi75jTOmlBGPBHlF3ekE0mtA3nK_M/gviz/tq?tqx=out:json";
+const DELETE_URL = "https://script.google.com/macros/s/AKfycbyNUCRo3JKNk_bVq9VcdpbICGuBiTytBGRAjFr7VDrHVvG6TMxaA195sBSSBOeiR1DG/exec";
+
+let localConnection, dataChannel;
+let pollingInterval;
+let isManuallyConnecting = false;
+let peerId = null; // Global peerId variable
+const CONNECTION_TIMEOUT = 40000; // 30 seconds timeout for connection
+const CHUNK_TIMEOUT = 15000; // 15 seconds for chunk timeout
+const MAX_RETRIES = 3; // Maximum retries for missing chunks
+
+// File sending configuration
+// const CHUNK_SIZE = 16384; // 16KB chunks for WebRTC data channel
+const CHUNK_SIZE = 65536; // 16KB chunks for WebRTC data channel
+const BUFFER_THRESHOLD = 262144; // 256KB buffer threshold to prevent overflow
+let fileReader = new FileReader();
+let currentFile = null;
+let currentChunk = 0;
+let totalChunks = 0;
+let retryCounts = new Map(); // Track retries per messageId
+let activeTransfers = new Map(); // Store file references for resending
+let receivedFileInfo = null; // Global to store received file metadata
+
+$(document).ready(() => {
+  $('#peerIdSubmit').click(async function (e) {
+    e.preventDefault(); // prevent form default submission
+    isManuallyConnecting = true;
+    var username = $('#chat-username').val().trim();
+    peerId = $('#peer-id').val().trim(); // Set global peerId
+
+    // Clear previous error messages
+    $('#name-error').text('');
+    $('#peer-error').text('');
+
+    let hasError = false;
+
+    if (!username) {
+      // $('#name-error').text('Name is required');
+      // hasError = true;
+      username = "Anonymous";
+    }
+
+    if (!peerId) {
+      // $('#peer-error').text('Peer ID is required');
+      // hasError = true;
+      peerId = "peer123"
+    }
+
+    if (hasError) {
+      return;
+    }
+
+    // Proceed to connect
+    $('#peerIdSubmit').prop('disabled', true).text('Connecting...');
+    $('#joinPeer').prop('disabled', true).text('Join');
+    $('#peerId').val(peerId);
+    startConnection(peerId);
+  });
+
+  // Handle file selection
+  $('#media-input').change((event) => {
+    const file = event.target.files[0];
+    if (file) {
+      currentFile = file; // Store the selected file
+    } else {
+      currentFile = null; // Clear if no file is selected
+    }
+  });
+
+  // Handle file sending on button click
+  $('#btn-send-media').click(() => {
+    if (!currentFile) {
+      $('#media-input').click(); // Trigger file input if no file is selected
+    } else if (dataChannel && dataChannel.readyState === 'open') {
+      console.log('Sending file, dataChannel state:', dataChannel.readyState);
+      const name = $('#chat-username').val() || 'Anonymous';
+      const messageId = Date.now().toString();
+      currentChunk = 0;
+      totalChunks = Math.ceil(currentFile.size / CHUNK_SIZE);
+
+      // Store file reference for potential resending
+      activeTransfers.set(messageId, {
+        file: currentFile,
+        fileName: currentFile.name,
+        fileSize: currentFile.size,
+        fileType: currentFile.type || 'application/octet-stream',
+        totalChunks
+      });
+
+      // Send file metadata
+      const metadata = {
+        type: 'file',
+        name,
+        messageId,
+        fileName: currentFile.name,
+        fileSize: currentFile.size,
+        fileType: currentFile.type || 'application/octet-stream'
+      };
+      try {
+        dataChannel.send(JSON.stringify(metadata));
+        // Create URL for the sent file
+        const fileUrl = URL.createObjectURL(currentFile);
+        displayMessage(name, currentFile.name, true, 'file', fileUrl, messageId, 'sent', metadata.fileType);
+
+        // Show progress bar
+        showProgressBar(messageId, true);
+        // Start sending file chunks
+        sendFileChunks(messageId);
+      } catch (error) {
+        console.error('Error sending file:', error);
+        hideProgressBar(messageId);
+        activeTransfers.delete(messageId);
+        alert('Failed to send file. Please try again.');
+      }
+    } else {
+      console.warn('Cannot send file, dataChannel state:', dataChannel ? dataChannel.readyState : 'undefined');
+      alert('Please wait until the connection is established before sending a file.');
+    }
+  });
+
+  // Bind text send handler once
+  $('#btn-send-text').click(() => {
+    const name = $('#chat-username').val() || 'Anonymous';
+    const message = $('#chat-message').val();
+    const messageId = Date.now().toString();
+    if (message && dataChannel && dataChannel.readyState === 'open') {
+      console.log('Sending text message, dataChannel state:', dataChannel.readyState);
+      try {
+        dataChannel.send(JSON.stringify({ type: 'text', name, message, messageId }));
+        displayMessage(name, message, true, 'text', null, messageId, 'sent');
+        $('#chat-message').val('');
+      } catch (error) {
+        console.error('Error sending text message:', error);
+        alert('Failed to send message. Please try again.');
+      }
+    } else {
+      console.warn('Cannot send text, dataChannel state:', dataChannel ? dataChannel.readyState : 'undefined');
+      alert('Please wait until the connection is established before sending a message.');
+    }
+  });
+
+    // Handle delete all button click
+  $('#delete-all-btn').click(() => {
+      fetch(DELETE_URL, {
+      method: "POST",
+      body: new URLSearchParams({ peerId: '' }) // Empty peerId to delete all entries
+    })
+      .then(res => res.text())
+      .then(result => alert("Deleted all SDP entries:", result))
+      .catch(err => alert("Error deleting SDP entries:", err));
+    });
+
+    // Handle Join button click
+  $('#joinPeer').click(async function (e) {
+    e.preventDefault();
+    isManuallyConnecting = true;
+    const username = $('#chat-username').val().trim();
+    peerId = $('#peer-id').val().trim(); // Set global peerId
+
+    // Clear previous error messages
+    $('#name-error').text('');
+    $('#peer-error').text('');
+
+    let hasError = false;
+
+    if (!username) {
+      $('#name-error').text('Name is required');
+      hasError = true;
+    }
+
+    if (!peerId) {
+      $('#peer-error').text('Peer ID is required');
+      hasError = true;
+    }
+
+    if (hasError) {
+      return;
+    }
+
+    // Proceed to join
+    $('#joinPeer').prop('disabled', true).text('Joining...');
+    $('#peerIdSubmit').prop('disabled', true).text('Connect');
+    $('#peerId').val(peerId);
+    startJoinConnection(peerId);
+  });
+
+  $('#confirmSavePeerBtn').click(async () => {
+    const peerIdInput = $('#peerIdToSave').val().trim();
+    const peerNameInput = $('#peerNameToSave').val().trim();
+    const alertBox = $('#save-peer-alert');
+    alertBox.addClass('d-none').text('');
+
+    if (!peerIdInput || !peerNameInput) {
+      alertBox.text("Peer ID or Name cannot be empty").removeClass('d-none');
+      return;
+    }
+
+    // Ask for notification permission
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      alertBox.text("Notification permission denied. Cannot save Peer ID.")
+              .removeClass('d-none');
+      return;
+    }
+
+    // Save to localStorage
+    localStorage.setItem("peerIds", peerIdInput);
+    localStorage.setItem("peerName", peerNameInput);
+    alert(`Peer ID "${peerIdInput}" saved for notifications.`);
+
+    $('#savePeerModal').modal('hide');
+  });
+
+  $('#settingBtn').click(function(){
+      const savedPeers = localStorage.getItem("peerIds") || "";
+      const savedPeersName = localStorage.getItem("peerName") || "";
+      if(savedPeers){
+        $('#peerIdToSave').val(savedPeers);
+        $('#peerNameToSave').val(savedPeersName);
+      }
+  });
+  let hasPrompted = false;
+  let autoCheckInterval = setInterval(async () => {
+  if (isManuallyConnecting || hasPrompted) return;
+  const savedPeers = localStorage.getItem("peerIds") || "peer123";
+  const savedPeerName = localStorage.getItem("peerName") || "Anonymous";
+  if (!savedPeers) return;
+    const offer = await fetchSDP(savedPeers, "offer");
+    if (offer) {
+      if (Notification.permission === "granted" && document.visibilityState !== "visible") {
+        const notification = new Notification("Wavelite", {
+          body: `Peer "${savedPeers}" is requesting to connect.`,
+          icon: "/logo.png"
+        });
+
+        notification.onclick = function (event) {
+          event.preventDefault(); // Prevent default behavior like focusing the tab
+
+          // Bring window to front
+          window.focus();
+
+          // Trigger your modal
+          $('#autoJoinMessage').text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);
+          const autoJoinModal = new bootstrap.Modal(document.getElementById('autoJoinModal'));
+          autoJoinModal.show();
+
+          // Bind Join button logic
+          $('#autoJoinConfirmBtn').off('click').on('click', () => {
+            autoJoinModal.hide();
+            setTimeout(() => {
+              isManuallyConnecting = true;
+              $('#peer-id').val(savedPeers);
+              $('#chat-username').val(savedPeerName);
+              $('#joinPeer').click(); // Trigger join
+            }, 300);
+          });
+        };
+
+      }else if (Notification.permission !== "denied") {
+        // Ask for permission only if not previously denied
+        Notification.requestPermission().then(permission => {
+          if (permission === "granted" && document.visibilityState !== "visible") {
+            new Notification("Wavelite", {
+              body: `Peer "${savedPeers}" is requesting to connect.`,
+              icon: "/logo.png"
+            });
+          }
+        });
+      }
+      // Show custom modal
+      hasPrompted = true; 
+      if (document.visibilityState === "visible") {
+        $('#autoJoinMessage').text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);
+        const autoJoinModal = new bootstrap.Modal(document.getElementById('autoJoinModal'));
+        autoJoinModal.show();
+
+        // Bind handler to Join button only once
+        $('#autoJoinConfirmBtn').off('click').on('click', () => {
+          autoJoinModal.hide();
+          setTimeout(() => {
+            isManuallyConnecting = true;
+            $('#peer-id').val(savedPeers);
+            $('#chat-username').val(savedPeerName);
+            $('#joinPeer').click(); // Trigger join
+          }, 300);
+        });
+      }
+      return; // Stop checking after first found match
+    }
+}, 3000); // every 3 seconds
+
+
+});
+
+async function startConnection(peerId) {
+  console.log(`Starting connection for peerId: ${peerId}`);
+  const offerEntry = await fetchSDP(peerId, 'offer');
+  if (offerEntry) {
+    // Act as answerer
+    console.log("Offer found, acting as answerer");
+    await setupAnswerer(offerEntry);
+  } else {
+    // Act as offerer
+    console.log("No offer found, acting as offerer");
+    await setupOfferer(peerId);
+  }
+}
+
+async function setupOfferer(peerId) {
+  localConnection = createPeerConnection();
+  dataChannel = localConnection.createDataChannel("chat");
+  setupDataChannel();
+  $('#peerIdSubmit').text('Offer Creating...');
+  try {
+    const offer = await localConnection.createOffer();
+    await localConnection.setLocalDescription(offer);
+    await waitForIceGathering(localConnection);
+    console.log(`Submitting offer SDP for peerId: ${peerId}`);
+    await submitSDP(peerId, 'offer', JSON.stringify(localConnection.localDescription));
+    $('#peerIdSubmit').text("Waiting for peer...");
+
+    // Start polling for the answer with timeout
+    let startTime = Date.now();
+    pollingInterval = setInterval(async () => {
+      if (Date.now() - startTime > CONNECTION_TIMEOUT) {
+        clearInterval(pollingInterval);
+        $('#peerIdSubmit').prop('disabled', false).text('Connect');
+        $('#joinPeer').prop('disabled', false).text('Join');
+        alert('Connection timed out. Please try again or check peer ID.');
+        return;
+      }
+      const answerEntry = await fetchSDP(peerId, 'answer');
+      if (answerEntry) {
+        console.log(`Answer SDP found for peerId: ${peerId}`);
+        clearInterval(pollingInterval);
+        await localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(answerEntry.sdp)));
+      }
+    }, 5000); // Polling interval 5 seconds
+  } catch (error) {
+    console.error('Error setting up offerer:', error);
+    $('#peerIdSubmit').prop('disabled', false).text('Connect');
+    $('#joinPeer').prop('disabled', false).text('Join');
+    alert('Failed to establish connection. Please try again.');
+  }
+}
+
+async function setupAnswerer(offerEntry) {
+  localConnection = createPeerConnection();
+
+  localConnection.ondatachannel = (event) => {
+    dataChannel = event.channel;
+    setupDataChannel();
+  };
+
+  try {
+    await localConnection.setRemoteDescription(new RTCSessionDescription(JSON.parse(offerEntry.sdp)));
+    const answer = await localConnection.createAnswer();
+    await localConnection.setLocalDescription(answer);
+    await waitForIceGathering(localConnection);
+    console.log(`Submitting answer SDP for peerId: ${offerEntry.peerId}`);
+    await submitSDP(offerEntry.peerId, 'answer', JSON.stringify(localConnection.localDescription));
+  } catch (error) {
+    console.error('Error setting up answerer:', error);
+    $('#peerIdSubmit').prop('disabled', false).text('Connect');
+    $('#joinPeer').prop('disabled', false).text('Join');
+    alert('Failed to establish connection. Please try again.');
+  }
+}
+
+function createPeerConnection() {
+  const pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+     // { urls: 'stun:stun2.l.google.com:19302' },
+      //{ urls: 'stun:stun3.l.google.com:19302' },
+      //{ urls: 'stun:stun4.l.google.com:19302' },
+    ], 
+    iceCandidatePoolSize: 0 
+  });
+  pc.oniceconnectionstatechange = () => {
+    console.log('ICE connection state:', pc.iceConnectionState);
+  };
+  return pc;
+}
+
+function waitForIceGathering(pc) {
+  $('#peerIdSubmit').text('ICE Gathering...');
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === "complete") return resolve();
+    const checkState = () => {
+      if (pc.iceGatheringState === "complete") {
+        pc.removeEventListener("icegatheringstatechange", checkState);
+        resolve();
+      }
+    };
+    pc.addEventListener("icegatheringstatechange", checkState);
+  });
+}
+
+async function submitSDP(peerId, role, sdp) {
+  $('#peerIdSubmit').text('Submitting Offer...');
+  const form = new FormData();
+  form.append("entry.1244760702", peerId);
+  form.append("entry.443244439", role);
+  form.append("entry.479288741", sdp);
+  try {
+    await fetch(FORM_URL, {
+      method: "POST",
+      mode: "no-cors",
+      body: form
+    });
+    console.log(`Submitted ${role} SDP for peerId: ${peerId}`);
+    $('#peerIdSubmit').text('Offer Submitted');
+  } catch (error) {
+    console.error(`Error submitting ${role} SDP:`, error);
+    throw error;
+  }
+}
+
+async function fetchSDP(peerId, role) {
+  try {
+    const res = await fetch(SHEET_URL);
+    const text = await res.text();
+    const json = JSON.parse(text.substring(47).slice(0, -2));
+    const rows = json.table.rows;
+    for (let row of rows) {
+      const pid = row.c[1]?.v;
+      const r = row.c[2]?.v;
+      const sdp = row.c[3]?.v;
+      if (pid == peerId && r == role && sdp) {
+        console.log(`Found ${role} SDP for peerId: ${pid}`);
+        return { peerId: pid, role: r, sdp };
+      }
+    }
+    console.log(`No ${role} SDP found for peerId: ${peerId}`);
+    return null;
+  } catch (e) {
+    console.error(`Failed to fetch ${role} SDP for peerId: ${peerId}:`, e);
+    return null;
+  }
+}
+
+function setupDataChannel() {
+  let receivedBuffers = [];
+  let lastChunkTime = null;
+  let chunkTimeoutId = null;
+  let expectedChunk = 0; // Track expected chunk index
+
+  if (!peerId) {
+    console.error("peerId is undefined in setupDataChannel");
+    return;
+  }
+
+  dataChannel.onopen = () => {
+    console.log("Data channel opened for peerId:", peerId);
+    deletePeerFromSheet(peerId);
+    transitionToChat();
+  };
+
+  dataChannel.onmessage = (e) => {
+    if (e.data instanceof ArrayBuffer) {
+      if (receivedFileInfo) {
+        receivedBuffers.push(e.data);
+        lastChunkTime = Date.now();
+        expectedChunk++;
+        const totalReceivedBytes = receivedBuffers.reduce((sum, buf) => sum + buf.byteLength, 0);
+        console.log(`Received file chunk ${receivedBuffers.length}/${Math.ceil(receivedFileInfo.fileSize / CHUNK_SIZE)} for ${receivedFileInfo.fileName}, total bytes: ${totalReceivedBytes}, expected: ${receivedFileInfo.fileSize}`);
+        // Update receiver progress bar
+        updateProgressBar(receivedFileInfo.messageId, (totalReceivedBytes / receivedFileInfo.fileSize) * 100);
+        // Check if all chunks are received
+        if (totalReceivedBytes >= receivedFileInfo.fileSize) {
+          console.log(`All chunks received for ${receivedFileInfo.fileName}, reconstructing file`);
+          clearTimeout(chunkTimeoutId);
+          try {
+            const received = new Blob(receivedBuffers, { type: receivedFileInfo.fileType || 'application/octet-stream' });
+            const url = URL.createObjectURL(received);
+            displayMessage(receivedFileInfo.name, receivedFileInfo.fileName, false, 'file', url, receivedFileInfo.messageId, 'delivered', receivedFileInfo.fileType);
+            hideProgressBar(receivedFileInfo.messageId);
+            receivedBuffers = [];
+            receivedFileInfo = null;
+            expectedChunk = 0;
+            retryCounts.delete(receivedFileInfo?.messageId);
+          } catch (error) {
+            console.error(`Error reconstructing file ${receivedFileInfo.fileName}:`, error);
+            hideProgressBar(receivedFileInfo.messageId);
+            alert('Failed to reconstruct received file. Please try again.');
+            receivedBuffers = [];
+            receivedFileInfo = null;
+            expectedChunk = 0;
+            retryCounts.delete(receivedFileInfo?.messageId);
+          }
+        } else {
+          // Set timeout to check for missing chunks
+          clearTimeout(chunkTimeoutId);
+          chunkTimeoutId = setTimeout(() => {
+            if (receivedFileInfo && totalReceivedBytes < receivedFileInfo.fileSize) {
+              const retryCount = retryCounts.get(receivedFileInfo.messageId) || 0;
+              if (retryCount < MAX_RETRIES) {
+                console.log(`Requesting resend for ${receivedFileInfo.fileName}, received: ${totalReceivedBytes}, expected: ${receivedFileInfo.fileSize}, chunk: ${expectedChunk}`);
+                retryCounts.set(receivedFileInfo.messageId, retryCount + 1);
+                dataChannel.send(JSON.stringify({
+                  type: 'resend_request',
+                  messageId: receivedFileInfo.messageId,
+                  chunkIndex: expectedChunk
+                }));
+                lastChunkTime = Date.now(); // Reset timeout
+              } else {
+                console.error(`Max retries reached for ${receivedFileInfo.fileName}, received: ${totalReceivedBytes}, expected: ${receivedFileInfo.fileSize}`);
+                hideProgressBar(receivedFileInfo.messageId);
+                alert(`Failed to receive all chunks for ${receivedFileInfo.fileName} after ${MAX_RETRIES} retries. Please try again.`);
+                receivedBuffers = [];
+                receivedFileInfo = null;
+                expectedChunk = 0;
+                retryCounts.delete(receivedFileInfo.messageId);
+              }
+            }
+          }, CHUNK_TIMEOUT);
+        }
+      }
+    } else {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'text') {
+        displayMessage(msg.name, msg.message, false, 'text', null, msg.messageId, 'delivered');
+      } else if (msg.type === 'file') {
+        receivedFileInfo = {
+          name: msg.name,
+          messageId: msg.messageId,
+          fileName: msg.fileName,
+          fileSize: msg.fileSize,
+          fileType: msg.fileType
+        };
+        receivedBuffers = [];
+        lastChunkTime = Date.now();
+        expectedChunk = 0;
+        console.log(`Received file metadata for ${msg.fileName}, size: ${msg.fileSize}, type: ${msg.fileType}`);
+        // Show progress bar for receiver
+        showProgressBar(msg.messageId, false);
+      } else if (msg.type === 'resend_request') {
+        console.log(`Received resend request for messageId: ${msg.messageId}, chunk: ${msg.chunkIndex}`);
+        resendFileChunk(msg.messageId, msg.chunkIndex);
+      }
+    }
+  };
+
+  dataChannel.onerror = (error) => {
+    console.error('Data channel error:', error);
+    if (receivedFileInfo) {
+      hideProgressBar(receivedFileInfo.messageId);
+      alert(`Data channel error during transfer of ${receivedFileInfo.fileName}. Please reconnect and try again.`);
+      receivedBuffers = [];
+      receivedFileInfo = null;
+      expectedChunk = 0;
+      clearTimeout(chunkTimeoutId);
+      retryCounts.delete(receivedFileInfo.messageId);
+    } else {
+      alert('Data channel error occurred. Please reconnect and try again.');
+    }
+  };
+}
+
+function sendFileChunks(messageId) {
+  const transfer = activeTransfers.get(messageId);
+  if (!transfer || currentChunk * CHUNK_SIZE >= transfer.fileSize) {
+    console.log('File sending completed for messageId:', messageId);
+    $('#media-input').val('');
+    document.getElementById('media-input').value = ''; // Clear file input
+    currentFile = null;
+    currentChunk = 0;
+    totalChunks = 0;
+    hideProgressBar(messageId);
+    activeTransfers.delete(messageId);
+    retryCounts.delete(messageId);
+    return;
+  }
+
+  // Check buffer to prevent overflow
+  if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
+    console.log(`Buffer full (${dataChannel.bufferedAmount} bytes), waiting for messageId: ${messageId}`);
+    setTimeout(() => sendFileChunks(messageId), 200); // Increased delay to 200ms
+    return;
+  }
+
+  const start = currentChunk * CHUNK_SIZE;
+  const end = Math.min(start + CHUNK_SIZE, transfer.fileSize);
+  fileReader.onload = () => {
+    try {
+      dataChannel.send(fileReader.result);
+      console.log(`Sent file chunk ${currentChunk + 1}/${transfer.totalChunks} for messageId: ${messageId}`);
+      currentChunk++;
+      // Update progress bar
+      updateProgressBar(messageId, (currentChunk / transfer.totalChunks) * 100);
+      setTimeout(() => sendFileChunks(messageId), 10); // Small delay to prevent stack overflow
+    } catch (error) {
+      console.error('Error sending file chunk for messageId:', messageId, error);
+      hideProgressBar(messageId);
+      activeTransfers.delete(messageId);
+      alert('Failed to send file chunk. Please try again.');
+      retryCounts.delete(messageId);
+      throw error;
+    }
+  };
+  fileReader.onerror = () => {
+    console.error('FileReader error for messageId:', messageId);
+    hideProgressBar(messageId);
+    activeTransfers.delete(messageId);
+    alert('Failed to read file chunk. Please try again.');
+    retryCounts.delete(messageId);
+  };
+  const slice = transfer.file.slice(start, end);
+  fileReader.readAsArrayBuffer(slice);
+}
+
+function resendFileChunk(messageId, chunkIndex) {
+  const transfer = activeTransfers.get(messageId);
+  if (!transfer || chunkIndex * CHUNK_SIZE >= transfer.fileSize) {
+    console.warn(`Cannot resend chunk ${chunkIndex} for messageId ${messageId}: File or chunk out of range`);
+    return;
+  }
+
+  if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
+    console.log(`Buffer full during resend (${dataChannel.bufferedAmount} bytes), retrying for messageId: ${messageId}`);
+    setTimeout(() => resendFileChunk(messageId, chunkIndex), 200);
+    return;
+  }
+
+  const start = chunkIndex * CHUNK_SIZE;
+  const end = Math.min(start + CHUNK_SIZE, transfer.fileSize);
+  fileReader.onload = () => {
+    try {
+      dataChannel.send(fileReader.result);
+      console.log(`Resent file chunk ${chunkIndex + 1}/${transfer.totalChunks} for messageId ${messageId}`);
+    } catch (error) {
+      console.error(`Error resending file chunk ${chunkIndex} for messageId ${messageId}:`, error);
+    }
+  };
+  fileReader.onerror = () => {
+    console.error(`FileReader error during resend for messageId: ${messageId}`);
+  };
+  const slice = transfer.file.slice(start, end);
+  fileReader.readAsArrayBuffer(slice);
+}
+
+function showProgressBar(messageId, isSender) {
+  const alignClass = isSender ? 'self' : 'other';
+  // const label = isSender ? 'Uploading' : 'Downloading';
+  // Get file name from activeTransfers (sender) or receivedFileInfo (receiver)
+  const fileName = isSender 
+    ? (activeTransfers.get(messageId)?.fileName || 'Unknown File')
+    : (receivedFileInfo?.fileName || 'Unknown File');
+  $('#chat-display').append(`
+    <div class="chat-message ${alignClass} px-3" id="progress-${messageId}">
+      <div class="file-name mt-2" style="font-size: 14px; font-weight: 500;">${fileName}</div>
+      <div class="progress mt-2" style="height: 30px;">
+        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" 
+             role="progressbar" 
+             style="width: 0%; font-size: 16px; line-height: 30px;" 
+             aria-valuenow="0" 
+             aria-valuemin="0" 
+             aria-valuemax="100">
+             <span class="progress-percentage">0%</span>
+        </div>
+      </div>
+    </div>
+  `);
+  $('#chat-display').scrollTop($('#chat-display')[0].scrollHeight);
+}
+
+function updateProgressBar(messageId, percentage) {
+  const roundedPercentage = Math.min(100, Math.round(percentage));
+  $(`#progress-${messageId} .progress-bar`)
+    .css('width', `${roundedPercentage}%`)
+    .attr('aria-valuenow', roundedPercentage)
+    .find('.progress-percentage')
+    .text(`${roundedPercentage}%`);
+}
+
+function hideProgressBar(messageId) {
+  $(`#progress-${messageId}`).remove();
+}
+
+function transitionToChat() {
+  if ($('#chat-section').hasClass('d-none')) {
+    $('#login-section').removeClass('d-flex').addClass('d-none');
+    $('#chat-section').removeClass('d-none');
+    $('#peerIdSubmit').prop('disabled', false).text('Disconnect');
+    console.log('Transitioned to chat UI');
+  }
+}
+
+function displayMessage(name, content, isSelf, type, file, messageId, status, fileType = null) {
+  const alignClass = isSelf ? 'self' : 'other';
+  const statusIcon = isSelf ? `<span class="status-icon text-muted ms-2"><i class="fas fa-check-double"></i></span>` : '';
+  const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  let messageContent = content;
+  if (type === 'file' && file) {
+    const isImage = fileType && fileType.startsWith('image/');
+    const isAudio = fileType && fileType.startsWith('audio/');
+    const isVideo = fileType && fileType.startsWith('video/');
+    const downloadButton = `<a href="${file}" download="${content}" class="btn btn-sm btn-secondary ms-1"><i class="fas fa-download"></i></a>`;
+    const fileNameDisplay = `<div class="file-name" style="font-size: 13px; font-weight: 500;">${content}</div>`;
+
+    if (isImage) {
+      //messageContent = `<img src="${file}" alt="${content}" style="max-width: 300px; max-height: 300px; object-fit: contain;" class="img-fluid rounded mt-2" /><br>${fileNameDisplay} ${downloadButton}`;
+      messageContent = `
+      <div class="image-wrapper" style="max-width: 100%; overflow: hidden;">
+        <img src="${file}" alt="${content}" class="img-fluid rounded mt-2" style="width: 100%; height: auto; object-fit: contain;" />
+      </div>
+      <br>${fileNameDisplay} ${downloadButton}`;
+    } else if (isAudio) {
+      messageContent = `<audio controls src="${file}" class="mt-2" style="width: 100%; max-width: 300px;"></audio><br>${fileNameDisplay} ${downloadButton}`;
+    } else if (isVideo) {
+      messageContent = `<video controls src="${file}" class="mt-2" style="max-width: 300px; max-height: 250px; object-fit: contain;" class="img-fluid rounded"></video><br>${fileNameDisplay} ${downloadButton}`;
+    } else {
+      messageContent = `${fileNameDisplay}${downloadButton}`;
+    }
+  }
+
+  try {
+    $('#chat-display').append(`
+      <div class="chat-message ${alignClass} px-3">
+        <div class="message py-1" style="font-size:12px;font-weight:450;">${messageContent}</div>
+        <div class="message-meta d-flex justify-content-end border-top border-secondary mt-2">
+          <span class="timestamp text-end" style="font-size:10px;">${isSelf ? '' : `<span class="name" style="font-size:12px;">${name}</span>`} ${timestamp} ${statusIcon}</span>
+        </div>
+      </div>
+    `);
+    $('#chat-display').scrollTop($('#chat-display')[0].scrollHeight);
+    console.log(`Displayed message for ${type}: ${content}, fileType: ${fileType || 'none'}`);
+  } catch (error) {
+    console.error(`Error displaying message for ${content}:`, error);
+    alert('Failed to display message in UI. Please refresh the page.');
+  }
+}
+function deletePeerFromSheet(peerId) {
+  if (!peerId) {
+    console.error("peerId is undefined in deletePeerFromSheet");
+    return;
+  }
+  fetch(DELETE_URL, {
+    method: "POST",
+    body: new URLSearchParams({ peerId })
+  })
+  .then(res => res.text())
+  .then(result => console.log("Deleted SDP for peerId:", peerId, result))
+  .catch(err => console.error("Delete error for peerId:", peerId, err));
+}
+
+async function startJoinConnection(peerId) {
+  console.log(`Starting join connection for peerId: ${peerId}`);
+  $('#joinPeer').text('Waiting for offer...');
+
+  // Start polling for offer with timeout
+  let startTime = Date.now();
+  pollingInterval = setInterval(async () => {
+    if (Date.now() - startTime > CONNECTION_TIMEOUT) {
+      clearInterval(pollingInterval);
+      $('#joinPeer').prop('disabled', false).text('Join');
+      $('#peerIdSubmit').prop('disabled', false).text('Connect');
+      alert('No offer found. Please try again or check peer ID.');
+      return;
+    }
+    const offerEntry = await fetchSDP(peerId, 'offer');
+    if (offerEntry) {
+      console.log(`Offer SDP found for peerId: ${peerId}, proceeding as answerer`);
+      clearInterval(pollingInterval);
+      try {
+        await setupAnswerer(offerEntry);
+        $('#joinPeer').text('Connected');
+      } catch (error) {
+        console.error('Error during join connection:', error);
+        $('#joinPeer').prop('disabled', false).text('Join');
+        $('#peerIdSubmit').prop('disabled', false).text('Connect');
+        alert('Failed to join connection. Please try again.');
+      }
+    } else {
+      console.log(`No offer SDP found yet for peerId: ${peerId}`);
+    }
+  }, 3000); // Polling interval 3 seconds
+}
