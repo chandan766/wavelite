@@ -120,6 +120,9 @@ $(document).ready(() => {
     }
   });
 
+  $('#reloadBtn').click(function() {
+      location.reload(); // Reloads the current page
+  });
   // Bind text send handler once
   $('#btn-send-text').click(() => {
     const name = $('#chat-username').val() || 'Anonymous';
