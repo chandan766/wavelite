@@ -29,7 +29,7 @@ wave-lite/
 
 ## How to Use
 1. **Access the Application**:
-   - Open `https://chandan766.github.io/wavelite/`  browser windows/tabs or on two different devices.
+   - Open `https://wavelite.pages.dev/`  browser windows/tabs or on two different devices.
 
 2. **Connect to a Peer**:
    - In the first browser, enter your name and a unique Peer ID (e.g., `peer123`), then click "Connect". This acts as the offerer.
