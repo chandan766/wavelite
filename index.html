@@ -116,6 +116,34 @@
         <input type="text" id="peerNameToSave" class="form-control" placeholder="Enter Your Name">
         <input type="text" id="peerIdToSave" class="form-control mt-2" placeholder="Default peer Id: peer123">
         <div id="save-peer-alert" class="mt-2 text-danger small d-none">Notification permission denied. Cannot save Peer ID.</div>
+        <label class="form-label mt-3 bg-secondary text-white p-2 w-100 mb-2">Select STUN Servers (minimum 2): <span class="bg-success" id="stunSaveStatus"></span></label>
+        <div id="stunServerCheckboxes" class="form-check-group">
+          <div class="form-check">
+            <input class="form-check-input stun-option" type="checkbox" value="stun:stun.l.google.com:19302" id="stun1">
+            <label class="form-check-label" for="stun1">stun.l.google.com:19302</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input stun-option" type="checkbox" value="stun:stun1.l.google.com:19302" id="stun2">
+            <label class="form-check-label" for="stun2">stun1.l.google.com:19302</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input stun-option" type="checkbox" value="stun:stun2.l.google.com:19302" id="stun3">
+            <label class="form-check-label" for="stun3">stun2.l.google.com:19302</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input stun-option" type="checkbox" value="stun:stun3.l.google.com:19302" id="stun4">
+            <label class="form-check-label" for="stun4">stun3.l.google.com:19302</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input stun-option" type="checkbox" value="stun:stun4.l.google.com:19302" id="stun5">
+            <label class="form-check-label" for="stun5">stun4.l.google.com:19302</label>
+          </div>
+          <div class="form-check">
+            <input class="form-check-input stun-option" type="checkbox" value="stun:stun.stunprotocol.org:3478" id="stun6">
+            <label class="form-check-label" for="stun6">stun.stunprotocol.org:3478</label>
+          </div>
+        </div>
+        <div id="stun-error" class="mt-2 text-danger small d-none">Please select at least 2 STUN servers.</div>
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -123,6 +151,7 @@
       </div>
     </div>
   </div>
+  
 </div>
 
 <!-- Auto Join Prompt Modal -->
