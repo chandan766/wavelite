@@ -3,7 +3,25 @@
       padding: 0;
       height: 100%;
       overflow: hidden;
+      background-color:#F5F5F5;
     }
+    .custom-bg,.form-check-input:checked {
+      background-color: #324376 !important;
+    }
+
+    .custom-fg{
+      color: #324376 !important;
+    }
+
+    .btn.custom-bg:hover{
+      background-color: #293662 !important;
+    }
+  
+    .spinner-border{
+      border-color: #324376 !important;
+      border-right-color: transparent !important;
+    }
+
     .header {
       position: fixed;
       top: 0;
@@ -13,7 +31,7 @@
     }
     #chat-section {
       position: absolute;
-      top: 70px;
+      top: 45px;
       bottom: 0;
       left: 0;
       right: 0;
