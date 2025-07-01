@@ -58,6 +58,7 @@ $(document).ready(() => {
     $('#peerId').val(peerId);
     $('#peerBtnGroup').removeClass('d-flex').addClass('d-none');
     $('#connectionStatusPanel').removeClass('d-none');
+    updateConnectionStatus('Connecting...','5',false);
     startConnection(peerId);
   });
 
@@ -190,6 +191,9 @@ $(document).ready(() => {
     $('#joinPeer').prop('disabled', true).text('Joining...');
     $('#peerIdSubmit').prop('disabled', true).text('Connect');
     $('#peerId').val(peerId);
+    $('#peerBtnGroup').removeClass('d-flex').addClass('d-none');
+    $('#connectionStatusPanel').removeClass('d-none');
+    updateConnectionStatus('Joining...','5',false);
     startJoinConnection(peerId);
   });
 
@@ -814,8 +818,8 @@ function deletePeerFromSheet(peerId) {
 
 async function startJoinConnection(peerId) {
   console.log(`Starting join connection for peerId: ${peerId}`);
-  $('#joinPeer').text('Waiting for offer...');
-
+  // $('#joinPeer').text('Waiting for offer...');
+  updateConnectionStatus('Waiting for offer...','10',false);
   // Start polling for offer with timeout
   let startTime = Date.now();
   pollingInterval = setInterval(async () => {
@@ -832,7 +836,8 @@ async function startJoinConnection(peerId) {
       clearInterval(pollingInterval);
       try {
         await setupAnswerer(offerEntry);
-        $('#joinPeer').text('Connected');
+        // $('#joinPeer').text('Connected');
+        updateConnectionStatus('Connected','100',true);
       } catch (error) {
         console.error('Error during join connection:', error);
         $('#joinPeer').prop('disabled', false).text('Join');
