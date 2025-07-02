@@ -5,6 +5,7 @@
       overflow: hidden;
       background-color:#F5F5F5;
     }
+    
     .custom-bg,.form-check-input:checked {
       background-color: #324376 !important;
     }
@@ -68,4 +69,22 @@
       margin-bottom: 10px;
       max-width: 70%;
       display: inline-block;
+    }
+
+    /* Responsive adjustments for mobile */
+    @media (max-width: 768px) {
+      .alert.custom-alert {
+        width: 90%;
+        font-size: 12px;
+        font-weight: 500;
+        padding: 10px 20px;
+      }
+    }
+    /* For larger screens, keep the alert centered */
+    @media (min-width: 769px) {
+      .alert.custom-alert {
+        width: 50%;
+        font-size: 16px;
+        padding: 15px 20px;
+      }
     }

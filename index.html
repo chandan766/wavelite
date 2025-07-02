@@ -53,17 +53,6 @@
     </button>
   </header>
 
-
-  <!-- Hidden Google Form -->
-  <div id="exchangeForm" hidden style="display:none;">
-    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
-    <form id="myForm" action="https://docs.google.com/forms/u/0/d/e/1FAIpQLSej8F-WqVXrneoK1caUwagNb8EbcsLG7c2IWbgzlGIxd7xYAQ/formResponse" method="POST" target="hidden_iframe">
-      <input type="text" id="peerId" name="entry.1244760702" hidden>
-      <input type="text" id="role" name="entry.443244439" hidden>
-      <input type="text" id="sdpContent" name="entry.479288741" hidden>
-    </form>
-  </div>
-
   <!-- Peer ID Login Card -->
   <main class="container d-flex justify-content-center align-items-center vh-100" id="login-section">
     <div class="card shadow p-4 w-100" style="max-width: 400px;">
@@ -73,14 +62,14 @@
           <label for="chat-username" class="form-label">
             <i class="fas fa-user me-1 text-secondary"></i> Your Name
           </label>
-          <input type="text" id="chat-username" class="form-control" placeholder="Enter your name [default: Anonymous]">
+          <input type="text" id="chat-username" class="form-control" maxlength="20" placeholder="Enter your name [default: Anonymous]">
           <span id="name-error" class="text-danger small"></span>
         </div>
         <div class="mb-3">
           <label for="peer-id" class="form-label">
             <i class="fas fa-id-badge me-1 text-secondary"></i> Peer ID
           </label>
-          <input type="text" id="peer-id" class="form-control" placeholder="Enter Peer ID [default: peer123]">
+          <input type="text" id="peer-id" class="form-control" maxlength="100" placeholder="Enter Peer ID [default: peer123]">
           <span id="peer-error" class="text-danger small"></span>
         </div>
         <div id="peerBtnGroup" class="d-flex justify-content-between">
@@ -110,7 +99,7 @@
       <!-- Text Message Input Group -->
       <div id="text-input-group" class="d-flex align-items-center gap-2">
         <button id="btn-toggle" class="btn btn-outline-secondary"><i class="fas fa-paperclip"></i></button>
-        <input type="text" id="chat-message" class="form-control" placeholder="Start typing...">
+        <input type="text" id="chat-message" maxlength="1000" class="form-control" placeholder="Start typing...">
         <button id="btn-send-text" class="btn custom-bg text-white"><i class="fas fa-paper-plane"></i></button>
       </div>
 
@@ -133,14 +122,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
-        <label class="form-label mt-3 custom-bg text-white p-2 w-100 mb-2"><i class="fas fa-address-card"></i> Save Peer Information </label>
+        <label class="form-label mt-3 custom-bg text-white p-2 w-100 mb-2"><i class="fas fa-address-card"></i> Profile </label>
         <div class="d-flex align-items-center mb-2 ps-2 text-white custom-bg">
           <i class="fas fa-user me-2 fs-5 px-1"></i>
-          <input type="text" id="peerNameToSave" class="form-control rounded-0" placeholder="Enter Peer Name">
+          <input type="text" id="peerNameToSave" maxlength="20" class="form-control rounded-0" placeholder="Enter Your Name">
         </div>
         <div class="d-flex align-items-center mb-2 ps-2 text-white custom-bg">
           <i class="fas fa-id-badge me-2 fs-5 px-1"></i>
-          <input type="text" id="peerIdToSave" class="form-control rounded-0" placeholder="Enter Peer Id (default: peer123)">
+          <input type="text" id="peerIdToSave" maxlength="100" class="form-control rounded-0" placeholder="Enter Peer Id (default: peer123)">
         </div>
         <div id="save-peer-alert" class="mt-2 text-danger small d-none">Notification permission denied. Cannot save Peer ID.</div>
         <label class="form-label mt-3 custom-bg text-white p-2 w-100 mb-2"><i class="fas fa-server"></i> Select STUN Servers <span class="text-warning" id="stunSaveStatus"></span></label>
@@ -216,6 +205,7 @@
         $('#media-input-group').addClass('d-none');
         $('#text-input-group').removeClass('d-none');
       });
+
     });
   </script>
 </body>

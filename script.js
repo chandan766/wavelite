@@ -29,6 +29,8 @@ $(document).ready(() => {
     isManuallyConnecting = true;
     var username = $('#chat-username').val().trim();
     peerId = $('#peer-id').val().trim(); // Set global peerId
+    $('#chat-username').prop('disabled', true);
+    $('#peer-id').prop('disabled', true);
 
     // Clear previous error messages
     $('#name-error').text('');
@@ -75,7 +77,7 @@ $(document).ready(() => {
   // Handle file sending on button click
   $('#btn-send-media').click(() => {
     if (!currentFile) {
-      alert(currentFile)
+      showAlert(currentFile);
       $('#media-input').click(); // Trigger file input if no file is selected
     } else if (dataChannel && dataChannel.readyState === 'open') {
       $("#btn-toggle-back").trigger("click");
@@ -117,11 +119,11 @@ $(document).ready(() => {
         console.error('Error sending file:', error);
         hideProgressBar(messageId);
         activeTransfers.delete(messageId);
-        alert('Failed to send file. Please try again.');
+        showAlert('Failed to send file. Please try again.');
       }
     } else {
       console.warn('Cannot send file, dataChannel state:', dataChannel ? dataChannel.readyState : 'undefined');
-      alert('Please wait until the connection is established before sending a file.');
+      showAlert('Please wait until the connection is established before sending a file.');
     }
   });
 
@@ -141,11 +143,11 @@ $(document).ready(() => {
         $('#chat-message').val('');
       } catch (error) {
         console.error('Error sending text message:', error);
-        alert('Failed to send message. Please try again.');
+        showAlert('Failed to send message. Please try again.');
       }
     } else {
       console.warn('Cannot send text, dataChannel state:', dataChannel ? dataChannel.readyState : 'undefined');
-      alert('Please wait until the connection is established before sending a message.');
+      showAlert('Please wait until the connection is established before sending a message.');
     }
   });
 
@@ -156,8 +158,8 @@ $(document).ready(() => {
       body: new URLSearchParams({ peerId: '' }) // Empty peerId to delete all entries
     })
       .then(res => res.text())
-      .then(result => alert("Deleted all SDP entries:", result))
-      .catch(err => alert("Error deleting SDP entries:", err));
+      .then(result => showAlert(`Deleted all SDP entries:${result}`,false))
+      .catch(err => showAlert(`Error deleting SDP entries:${err}`));
     });
 
     // Handle Join button click
@@ -166,7 +168,8 @@ $(document).ready(() => {
     isManuallyConnecting = true;
     const username = $('#chat-username').val().trim();
     peerId = $('#peer-id').val().trim(); // Set global peerId
-
+    $('#chat-username').prop('disabled', true);
+    $('#peer-id').prop('disabled', true);
     // Clear previous error messages
     $('#name-error').text('');
     $('#peer-error').text('');
@@ -175,11 +178,15 @@ $(document).ready(() => {
 
     if (!username) {
       $('#name-error').text('Name is required');
+      $('#chat-username').prop('disabled', false);
+      $('#peer-id').prop('disabled', false);
       hasError = true;
     }
 
     if (!peerId) {
       $('#peer-error').text('Peer ID is required');
+      $('#chat-username').prop('disabled', false);
+      $('#peer-id').prop('disabled', false);
       hasError = true;
     }
 
@@ -208,18 +215,18 @@ $(document).ready(() => {
       return;
     }
 
-    // Ask for notification permission
-    const permission = await Notification.requestPermission();
-    if (permission !== "granted") {
-      alertBox.text("Notification permission denied. Cannot save Peer ID.")
-              .removeClass('d-none');
-      return;
-    }
-
     // Save to localStorage
     localStorage.setItem("peerIds", peerIdInput);
     localStorage.setItem("peerName", peerNameInput);
-    alert(`Peer ID "${peerIdInput}" saved for notifications.`);
+    showAlert(`Peer ID "${peerIdInput}" saved for notifications.`,false);
+
+    // Ask for notification permission
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      alertBox.text("Notification permission denied. Cannot able to notify the joining request")
+              .removeClass('d-none');
+      return;
+    }
 
     $('#savePeerModal').modal('hide');
   });
@@ -362,7 +369,7 @@ async function setupOfferer(peerId) {
         clearInterval(pollingInterval);
         $('#peerIdSubmit').prop('disabled', false).text('Connect');
         $('#joinPeer').prop('disabled', false).text('Join');
-        alert('Connection timed out. Please try again or check peer ID.');
+        showAlert('Connection timed out. Please try again or check peer ID.');
         return;
       }
       const answerEntry = await fetchSDP(peerId, 'answer');
@@ -385,7 +392,7 @@ async function setupOfferer(peerId) {
     console.error('Error setting up offerer:', error);
     $('#peerIdSubmit').prop('disabled', false).text('Connect');
     $('#joinPeer').prop('disabled', false).text('Join');
-    alert('Failed to establish connection. Please try again.');
+    showAlert('Failed to establish connection. Please try again.');
   }
 }
 
@@ -421,7 +428,7 @@ async function setupAnswerer(offerEntry) {
     console.error('❌ Error setting up answerer:', error);
     $('#peerIdSubmit').prop('disabled', false).text('Connect');
     $('#joinPeer').prop('disabled', false).text('Join');
-    alert('Failed to establish connection. Please try again.');
+    showAlert('Failed to establish connection. Please try again.');
   }
 }
 
@@ -525,6 +532,10 @@ function setupDataChannel() {
   dataChannel.onopen = () => {
     console.log("Data channel opened for peerId:", peerId);
     deletePeerFromSheet(peerId);
+    dataChannel.send(JSON.stringify({
+      type: 'username',
+      name: truncateName($('#chat-username').val() || "Anonymous")
+    }));
     transitionToChat();
   };
 
@@ -554,7 +565,7 @@ function setupDataChannel() {
           } catch (error) {
             console.error(`Error reconstructing file ${receivedFileInfo.fileName}:`, error);
             hideProgressBar(receivedFileInfo.messageId);
-            alert('Failed to reconstruct received file. Please try again.');
+            showAlert('Failed to reconstruct received file. Please try again.');
             receivedBuffers = [];
             receivedFileInfo = null;
             expectedChunk = 0;
@@ -578,7 +589,7 @@ function setupDataChannel() {
               } else {
                 console.error(`Max retries reached for ${receivedFileInfo.fileName}, received: ${totalReceivedBytes}, expected: ${receivedFileInfo.fileSize}`);
                 hideProgressBar(receivedFileInfo.messageId);
-                alert(`Failed to receive all chunks for ${receivedFileInfo.fileName} after ${MAX_RETRIES} retries. Please try again.`);
+                showAlert(`Failed to receive all chunks for ${receivedFileInfo.fileName} after ${MAX_RETRIES} retries. Please try again.`);
                 receivedBuffers = [];
                 receivedFileInfo = null;
                 expectedChunk = 0;
@@ -609,6 +620,9 @@ function setupDataChannel() {
       } else if (msg.type === 'resend_request') {
         console.log(`Received resend request for messageId: ${msg.messageId}, chunk: ${msg.chunkIndex}`);
         resendFileChunk(msg.messageId, msg.chunkIndex);
+      }else if (msg.type === 'username') {
+        console.log("Received peer username:", msg.name);
+        $('#delete-all-btn').text(msg.name).addClass('text-capitalize');
       }
     }
   };
@@ -617,14 +631,14 @@ function setupDataChannel() {
     console.error('Data channel error:', error);
     if (receivedFileInfo) {
       hideProgressBar(receivedFileInfo.messageId);
-      alert(`Data channel error during transfer of ${receivedFileInfo.fileName}. Please reconnect and try again.`);
+      showAlert(`Data channel error during transfer of ${receivedFileInfo.fileName}. Please reconnect and try again.`);
       receivedBuffers = [];
       receivedFileInfo = null;
       expectedChunk = 0;
       clearTimeout(chunkTimeoutId);
       retryCounts.delete(receivedFileInfo.messageId);
     } else {
-      alert('Data channel error occurred. Please reconnect and try again.');
+      showAlert('Data channel error occurred. Please reconnect and try again.');
     }
   };
 }
@@ -664,7 +678,7 @@ function sendFileChunks(messageId) {
       console.error('Error sending file chunk for messageId:', messageId, error);
       hideProgressBar(messageId);
       activeTransfers.delete(messageId);
-      alert('Failed to send file chunk. Please try again.');
+      showAlert('Failed to send file chunk. Please try again.');
       retryCounts.delete(messageId);
       throw error;
     }
@@ -673,7 +687,7 @@ function sendFileChunks(messageId) {
     console.error('FileReader error for messageId:', messageId);
     hideProgressBar(messageId);
     activeTransfers.delete(messageId);
-    alert('Failed to read file chunk. Please try again.');
+    showAlert('Failed to read file chunk. Please try again.');
     retryCounts.delete(messageId);
   };
   const slice = transfer.file.slice(start, end);
@@ -799,7 +813,7 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
     console.log(`Displayed message for ${type}: ${content}, fileType: ${fileType || 'none'}`);
   } catch (error) {
     console.error(`Error displaying message for ${content}:`, error);
-    alert('Failed to display message in UI. Please refresh the page.');
+    showAlert('Failed to display message in UI. Please refresh the page.');
   }
 }
 function deletePeerFromSheet(peerId) {
@@ -823,26 +837,29 @@ async function startJoinConnection(peerId) {
   // Start polling for offer with timeout
   let startTime = Date.now();
   pollingInterval = setInterval(async () => {
-    if (Date.now() - startTime > CONNECTION_TIMEOUT) {
+    const elapsed = Date.now() - startTime;
+    if (elapsed > CONNECTION_TIMEOUT) {
       clearInterval(pollingInterval);
       $('#joinPeer').prop('disabled', false).text('Join');
       $('#peerIdSubmit').prop('disabled', false).text('Connect');
-      alert('No offer found. Please try again or check peer ID.');
+      showAlert('No offer found. Please try again or check peer ID.');
       return;
     }
     const offerEntry = await fetchSDP(peerId, 'offer');
+    const percent = Math.min((elapsed / CONNECTION_TIMEOUT) * 100, 99); 
+    updateConnectionStatus("Waiting for offer...",percent,true);
     if (offerEntry) {
       console.log(`Offer SDP found for peerId: ${peerId}, proceeding as answerer`);
       clearInterval(pollingInterval);
       try {
         await setupAnswerer(offerEntry);
         // $('#joinPeer').text('Connected');
-        updateConnectionStatus('Connected','100',true);
+        updateConnectionStatus('Joined Successfully','100',true);
       } catch (error) {
         console.error('Error during join connection:', error);
         $('#joinPeer').prop('disabled', false).text('Join');
         $('#peerIdSubmit').prop('disabled', false).text('Connect');
-        alert('Failed to join connection. Please try again.');
+        showAlert('Failed to join connection. Please try again.');
       }
     } else {
       console.log(`No offer SDP found yet for peerId: ${peerId}`);
@@ -873,4 +890,29 @@ function updateConnectionStatus(message, percent, isFinal = false) {
   }
 }
 
-// displayMessage("chandan","hlw","yes","image")
+  function showAlert(message, isError = true) {
+    // Determine the alert type
+    const alertType = isError ? 'alert-danger' : 'alert-success';
+
+    // Create the alert element
+    const alert = $(`
+      <div class="alert custom-alert ${alertType} alert-dismissible fade show fixed-top d-flex align-items-center rounded-pill" role="alert" style="top: 10px; left: 50%; transform: translateX(-50%); z-index: 2000;">
+        <span class="${isError?'text-danger':'text-success'}">${message}</span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    `);
+
+    // Append the alert to the body
+    $('body').append(alert);
+
+    // Auto fade out after 4 seconds
+    setTimeout(function() {
+      alert.fadeOut(1000, function() {
+        $(this).remove(); // Remove the alert after fade out
+      });
+    }, 4000);
+  }
+function truncateName(name) {
+  name = name.trim();
+  return name.length > 10 ? name.slice(0, 7) + '...' : name;
+}
