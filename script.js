@@ -46,14 +46,10 @@ $(document).ready(() => {
     let hasError = false;
 
     if (!username) {
-      // $('#name-error').text('Name is required');
-      // hasError = true;
       username = "Anonymous";
     }
 
     if (!peerId) {
-      // $('#peer-error').text('Peer ID is required');
-      // hasError = true;
       peerId = "peer123"
     }
 
@@ -75,9 +71,9 @@ $(document).ready(() => {
   $('#media-input-group').change((event) => {
     const file = event.target.files[0];
     if (file) {
-      currentFile = file; // Store the selected file
+      currentFile = file; 
     } else {
-      currentFile = null; // Clear if no file is selected
+      currentFile = null; 
     }
   });
 
@@ -135,7 +131,7 @@ $(document).ready(() => {
   });
 
   $('#reloadBtn').click(function() {
-      location.reload(); // Reloads the current page
+      location.reload(); 
   });
   // Bind text send handler once
   $('#btn-send-text').click(() => {
@@ -162,7 +158,7 @@ $(document).ready(() => {
   $('#delete-all-btn').click(() => {
       fetch(DELETE_URL, {
       method: "POST",
-      body: new URLSearchParams({ peerId: '' }) // Empty peerId to delete all entries
+      body: new URLSearchParams({ peerId: '' }) 
     })
       .then(res => res.text())
       .then(result => showAlert(`Deleted all SDP entries:${result}`,false))
@@ -357,7 +353,6 @@ async function setupOfferer(peerId) {
   localConnection = createPeerConnection();
   dataChannel = localConnection.createDataChannel("chat");
   setupDataChannel();
-  // $('#connectionStatusText').text('Offer Creating...');
   updateConnectionStatus('Offer Creating...','10',false);
   try {
     const offer = await localConnection.createOffer();
@@ -365,7 +360,6 @@ async function setupOfferer(peerId) {
     await waitForIceGathering(localConnection);
     console.log(`Submitting offer SDP for peerId: ${peerId}`);
     await submitSDP(peerId, 'offer', JSON.stringify(localConnection.localDescription));
-    // $('#connectionStatusText').text("Waiting for peer...");
     updateConnectionStatus("Waiting for peer...",'100',true);
 
     // Start polling for the answer with timeout
@@ -466,7 +460,6 @@ function createPeerConnection() {
 
 
 function waitForIceGathering(pc) {
-  // $('#connectionStatusText').text('ICE Gathering...');
   updateConnectionStatus('ICE Gathering...','80',false);
   return new Promise(resolve => {
     if (pc.iceGatheringState === "complete") return resolve();
@@ -481,7 +474,6 @@ function waitForIceGathering(pc) {
 }
 
 async function submitSDP(peerId, role, sdp) {
-  // $('#connectionStatusText').text('Submitting Offer...');
   updateConnectionStatus('Submitting Offer...','90',false);
   const form = new FormData();
   form.append("entry.1244760702", peerId);
@@ -494,7 +486,6 @@ async function submitSDP(peerId, role, sdp) {
       body: form
     });
     console.log(`Submitted ${role} SDP for peerId: ${peerId}`);
-    // $('#connectionStatusText').text('Offer Submitted');
     updateConnectionStatus('Offer Submitted','99',false);
   } catch (error) {
     console.error(`Error submitting ${role} SDP:`, error);
@@ -529,7 +520,7 @@ function setupDataChannel() {
   let receivedBuffers = [];
   let lastChunkTime = null;
   let chunkTimeoutId = null;
-  let expectedChunk = 0; // Track expected chunk index
+  let expectedChunk = 0; 
 
   if (!peerId) {
     console.error("peerId is undefined in setupDataChannel");
@@ -629,7 +620,7 @@ function setupDataChannel() {
         resendFileChunk(msg.messageId, msg.chunkIndex);
       }else if (msg.type === 'username') {
         console.log("Received peer username:", msg.name);
-        $('#delete-all-btn').text(msg.name).addClass('text-capitalize');
+        $('#headerBtnName').text(msg.name).addClass('text-capitalize');
       }
     }
   };
@@ -733,7 +724,6 @@ function resendFileChunk(messageId, chunkIndex) {
 
 function showProgressBar(messageId, isSender) {
   const alignClass = isSender ? 'self' : 'other';
-  // const label = isSender ? 'Uploading' : 'Downloading';
   // Get file name from activeTransfers (sender) or receivedFileInfo (receiver)
   const fileName = isSender 
     ? (activeTransfers.get(messageId)?.fileName || 'Unknown File')
@@ -792,7 +782,6 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
     const fileNameDisplay = `<div class="file-name" style="font-size: 13px; font-weight: 500;">${content}</div>`;
 
     if (isImage) {
-      //messageContent = `<img src="${file}" alt="${content}" style="max-width: 300px; max-height: 300px; object-fit: contain;" class="img-fluid rounded mt-2" /><br>${fileNameDisplay} ${downloadButton}`;
       messageContent = `
       <div class="image-wrapper" style="max-width: 100%; overflow: hidden;">
         <img src="${file}" alt="${content}" class="img-fluid rounded mt-2" style="width: 100%; height: auto; object-fit: contain;" />
@@ -839,7 +828,6 @@ function deletePeerFromSheet(peerId) {
 
 async function startJoinConnection(peerId) {
   console.log(`Starting join connection for peerId: ${peerId}`);
-  // $('#joinPeer').text('Waiting for offer...');
   updateConnectionStatus('Waiting for offer...','10',false);
   // Start polling for offer with timeout
   let startTime = Date.now();
@@ -860,7 +848,6 @@ async function startJoinConnection(peerId) {
       clearInterval(pollingInterval);
       try {
         await setupAnswerer(offerEntry);
-        // $('#joinPeer').text('Connected');
         updateConnectionStatus('Joined Successfully','100',true);
       } catch (error) {
         console.error('Error during join connection:', error);

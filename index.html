@@ -39,8 +39,8 @@
   <header class="header custom-bg py-2 text-white d-flex justify-content-between align-items-center px-3">
     <!-- Left Section -->
     <button id="delete-all-btn" class="btn btn-link text-white fs-6 p-0 text-decoration-none fw-bold border-0 text-start">
-      <i class="fa-solid fa-message"></i> Wave Lite
-      <div id="status" class="text-white small" style="margin-left: 1.5rem; font-size: 0.7rem;"></div>
+      <span id="headerBtnName"><i class="fa-solid fa-message"></i> Wave Lite</span>
+      <div id="status" class="text-white small" style="font-size: 0.7rem;"></div>
     </button>
 
     <!-- Right Buttons -->
@@ -198,6 +198,7 @@
       $('#btn-toggle').click(() => {
         $('#text-input-group').addClass('d-none');
         $('#media-input-group').removeClass('d-none');
+        $('#chat-file').click();
       });
 
       // Toggle back to text input mode
