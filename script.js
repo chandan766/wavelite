@@ -143,7 +143,7 @@ $(document).ready(() => {
       try {
         dataChannel.send(JSON.stringify({ type: 'text', name, message, messageId }));
         displayMessage(name, message, true, 'text', null, messageId, 'sent');
-        $('#chat-message').val('');
+        $('#chat-message').val('').focus();
       } catch (error) {
         console.error('Error sending text message:', error);
         showAlert('Failed to send message. Please try again.');
@@ -778,8 +778,8 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
     const isImage = fileType && fileType.startsWith('image/');
     const isAudio = fileType && fileType.startsWith('audio/');
     const isVideo = fileType && fileType.startsWith('video/');
-    const downloadButton = `<a href="${file}" download="${content}" class="btn btn-sm btn-secondary ms-1"><i class="fas fa-download"></i></a>`;
-    const fileNameDisplay = `<div class="file-name" style="font-size: 13px; font-weight: 500;">${content}</div>`;
+    const downloadButton = `<a href="${file}" download="${content}" class="btn btn-sm btn-secondary w-100 mt-2 d-block"><i class="fas fa-download me-2"></i>Download</a>`;
+    const fileNameDisplay = `<div class="file-name" style="font-size: 13px; font-weight: 500;">${truncateName(content,20)}</div>`;
 
     if (isImage) {
       messageContent = `
@@ -792,7 +792,27 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
     } else if (isVideo) {
       messageContent = `<video controls src="${file}" class="mt-2" style="max-width: 300px; max-height: 250px; object-fit: contain;" class="img-fluid rounded"></video><br>${fileNameDisplay} ${downloadButton}`;
     } else {
-      messageContent = `${fileNameDisplay}${downloadButton}`;
+      let fileIconClass = 'fa-file text-dark';
+      if (fileType === 'application/pdf') {
+        fileIconClass = 'fa-file-pdf text-danger';
+      } else if (fileType.includes('word')) {
+        fileIconClass = 'fa-file-word text-primary';
+      } else if (
+        fileType === 'application/vnd.ms-excel' ||
+        fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      ) {
+        fileIconClass = 'fa-file-excel text-success';
+      } else if (
+        fileType === 'application/vnd.ms-powerpoint' ||
+        fileType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      ) {
+        fileIconClass = 'fa-file-powerpoint text-warning';
+      } else if (fileType.includes('zip') || fileType.includes('rar')) {
+        fileIconClass = 'fa-file-archive text-muted';
+      } else if (fileType.includes('text')) {
+        fileIconClass = 'fa-file-lines text-secondary';
+      }
+      messageContent = `<i class="fas ${fileIconClass} me-2 fs-4"></i> ${fileNameDisplay}${downloadButton}`;
     }
   }
 
@@ -801,7 +821,7 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
       <div class="chat-message ${alignClass} px-3">
         <div class="message py-1" style="font-size:12px;font-weight:450;">${messageContent}</div>
         <div class="message-meta d-flex justify-content-end border-top border-secondary mt-2">
-          <span class="timestamp text-end" style="font-size:10px;">${isSelf ? '' : `<span class="name" style="font-size:12px;">${name}</span>`} ${timestamp} ${statusIcon}</span>
+          <span class="timestamp text-end" style="font-size:10px;">${isSelf ? '' : `<span class="name" style="font-size:12px;"></span>`} ${timestamp} ${statusIcon}</span>
         </div>
       </div>
     `);
@@ -906,7 +926,8 @@ function updateConnectionStatus(message, percent, isFinal = false) {
       });
     }, 4000);
   }
-function truncateName(name) {
+function truncateName(name, len = 10) {
   name = name.trim();
-  return name.length > 10 ? name.slice(0, 7) + '...' : name;
+  return name.length > len ? name.slice(0, len - 3) + '...' : name;
 }
+
