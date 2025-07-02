@@ -24,6 +24,13 @@ let activeTransfers = new Map(); // Store file references for resending
 let receivedFileInfo = null; // Global to store received file metadata
 
 $(document).ready(() => {
+  let savedProfilePeerId = localStorage.getItem("peerIds") || "";
+  let savedProfilePeerName = localStorage.getItem("peerName") || "";
+  if(savedProfilePeerName){
+      $('#chat-username').val(savedProfilePeerName);
+      $('#peer-id').val(savedProfilePeerId);
+  }
+  
   $('#peerIdSubmit').click(async function (e) {
     e.preventDefault(); // prevent form default submission
     isManuallyConnecting = true;
