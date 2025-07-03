@@ -337,6 +337,8 @@
     function showFileInput(type) {
       $('#chat-file').data('attachment-type', type); // Store type for use later
       $('#chat-file').click();
+      $('#media-input-group').removeClass('d-none');
+      $('#text-input-group').addClass('d-none');
     }
 
     function startVoiceRecording() {

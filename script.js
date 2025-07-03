@@ -788,18 +788,26 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
       </div>
       <br>${fileNameDisplay} ${downloadButton}`;
     } else if (isAudio) {
-        // messageContent = `
-        //   <div class="audio-wrapper" style="max-width: 100%; overflow: hidden;">
-        //     <audio controls src="${file}" class="mt-2" style="width: 100%; max-width: 300px;"></audio>
-        //   </div>
-        //   <br>${fileNameDisplay} ${downloadButton}`;
         const containerId = `waveform-${Date.now()}`;
         messageContent = `
-          <div id="${containerId}" class="waveform rounded shadow-sm my-2" style="width: 100%; height: 80px;"></div>
-          <button onclick="window['player_${containerId}'].playPause()" class="btn btn-sm btn-primary mt-1">Play/Pause</button>
-          <br>${fileNameDisplay} ${downloadButton}
-        `;
+          <div class="card shadow-sm rounded-3 p-3 mb-2" style="background-color: #f8f9fa;">
+            <div id="${containerId}" class="waveform rounded mb-3" style="width: 100%; height: 80px;"></div>
 
+            <div class="text-center fw-semibold mb-2" style="word-break: break-word;">
+              ${fileNameDisplay}
+            </div>
+
+            <div class="d-flex justify-content-center">
+              <button id="btn-${containerId}" onclick="togglePlayPause('${containerId}')" class="btn btn-outline-primary btn-sm rounded-pill px-4">
+                <i id="icon-${containerId}" class="fas fa-play"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="text-end mb-3">
+            ${downloadButton}
+          </div>
+        `;
         setTimeout(() => {
           const wavesurfer = WaveSurfer.create({
             container: `#${containerId}`,
@@ -814,11 +822,6 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
 
     }
     else if (isVideo) {
-      // messageContent = `
-      //   <div class="video-wrapper" style="max-width: 100%; overflow: hidden;">
-      //     <video controls src="${file}" class="img-fluid rounded mt-2" style="width: 100%; height: auto; object-fit: contain;"></video>
-      //   </div>
-      //   <br>${fileNameDisplay} ${downloadButton}`;
       messageContent = `
         <div class="plyr-wrapper rounded overflow-hidden mt-2" style="max-width: 100%;">
           <video id="player-${Date.now()}" controls class="plyr__video-embed w-100" style="object-fit: contain; max-height: 250px;">
@@ -970,3 +973,20 @@ function truncateName(name, len = 10) {
   return name.length > len ? name.slice(0, len - 3) + '...' : name;
 }
 
+function togglePlayPause(containerId) {
+  const player = window[`player_${containerId}`];
+  const icon = document.getElementById(`icon-${containerId}`);
+  
+  if (!player) return;
+
+  player.playPause(); // Toggle player state
+
+  // Update icon
+  if (player.isPlaying()) {
+    icon.classList.remove('fa-play');
+    icon.classList.add('fa-pause');
+  } else {
+    icon.classList.remove('fa-pause');
+    icon.classList.add('fa-play');
+  }
+}
