@@ -80,7 +80,7 @@ $(document).ready(() => {
   // Handle file sending on button click
   $('#btn-send-media').click(() => {
     if (!currentFile) {
-      showAlert(currentFile);
+      showAlert("No file are selected!");
       $('#media-input').click(); // Trigger file input if no file is selected
     } else if (dataChannel && dataChannel.readyState === 'open') {
       $("#btn-toggle-back").trigger("click");
@@ -788,9 +788,48 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
       </div>
       <br>${fileNameDisplay} ${downloadButton}`;
     } else if (isAudio) {
-      messageContent = `<audio controls src="${file}" class="mt-2" style="width: 100%; max-width: 300px;"></audio><br>${fileNameDisplay} ${downloadButton}`;
-    } else if (isVideo) {
-      messageContent = `<video controls src="${file}" class="mt-2" style="max-width: 300px; max-height: 250px; object-fit: contain;" class="img-fluid rounded"></video><br>${fileNameDisplay} ${downloadButton}`;
+        // messageContent = `
+        //   <div class="audio-wrapper" style="max-width: 100%; overflow: hidden;">
+        //     <audio controls src="${file}" class="mt-2" style="width: 100%; max-width: 300px;"></audio>
+        //   </div>
+        //   <br>${fileNameDisplay} ${downloadButton}`;
+        const containerId = `waveform-${Date.now()}`;
+        messageContent = `
+          <div id="${containerId}" class="waveform rounded shadow-sm my-2" style="width: 100%; height: 80px;"></div>
+          <button onclick="window['player_${containerId}'].playPause()" class="btn btn-sm btn-primary mt-1">Play/Pause</button>
+          <br>${fileNameDisplay} ${downloadButton}
+        `;
+
+        setTimeout(() => {
+          const wavesurfer = WaveSurfer.create({
+            container: `#${containerId}`,
+            waveColor: '#ccc',
+            progressColor: '#0d6efd',
+            height: 80,
+            responsive: true,
+          });
+          wavesurfer.load(file);
+          window[`player_${containerId}`] = wavesurfer;
+        }, 100);
+
+    }
+    else if (isVideo) {
+      // messageContent = `
+      //   <div class="video-wrapper" style="max-width: 100%; overflow: hidden;">
+      //     <video controls src="${file}" class="img-fluid rounded mt-2" style="width: 100%; height: auto; object-fit: contain;"></video>
+      //   </div>
+      //   <br>${fileNameDisplay} ${downloadButton}`;
+      messageContent = `
+        <div class="plyr-wrapper rounded overflow-hidden mt-2" style="max-width: 100%;">
+          <video id="player-${Date.now()}" controls class="plyr__video-embed w-100" style="object-fit: contain; max-height: 250px;">
+            <source src="${file}" type="video/webm" />
+          </video>
+        </div>
+        <br>${fileNameDisplay} ${downloadButton}`;
+      setTimeout(() => {
+        const players = Plyr.setup('video');
+      }, 0);
+
     } else {
       let fileIconClass = 'fa-file text-dark';
       if (fileType === 'application/pdf') {
