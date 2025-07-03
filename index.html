@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
   <!-- ✅ Optimized Title for SEO -->
   <title>WaveLite Chat - Peer-to-Peer WebRTC Chat & File Sharing App</title>
   
@@ -36,7 +36,7 @@
 </head>
 
 <body>
-  <header class="header custom-bg py-2 text-white d-flex justify-content-between align-items-center px-3">
+  <header class="header custom-bg py-3 text-white d-flex justify-content-between align-items-center px-3">
     <!-- Left Section -->
     <button id="delete-all-btn" class="btn btn-link text-white fs-6 p-0 text-decoration-none fw-bold border-0 text-start">
       <span id="headerBtnName"><i class="fa-solid fa-message"></i> Wave Lite</span>
@@ -108,6 +108,16 @@
         <button id="btn-toggle-back" class="btn btn-outline-secondary"><i class="fas fa-times"></i></button>
         <input type="file" id="chat-file" class="form-control">
         <button id="btn-send-media" class="btn custom-bg text-white"><i class="fas fa-paper-plane"></i></button>
+      </div>
+    </div>
+    <div id="attachment-menu" class="attachment-menu d-none">
+      <div class="attachment-grid">
+        <button class="attachment-btn" data-type="image"><i class="fas fa-image"></i><br>Image</button>
+        <button class="attachment-btn" data-type="camera"><i class="fas fa-camera"></i><br>Camera</button>
+        <button class="attachment-btn" data-type="video"><i class="fas fa-video"></i><br>Video</button>
+        <button class="attachment-btn" data-type="audio"><i class="fas fa-microphone"></i><br>Audio</button>
+        <button class="attachment-btn" data-type="file"><i class="fas fa-file"></i><br>File</button>
+        <button class="attachment-btn" data-type="doc"><i class="fas fa-file-alt"></i><br>Document</button>
       </div>
     </div>
 
@@ -188,26 +198,73 @@
   </div>
 </div>
 
-
   <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
   <script src="script.js"></script>
   <script>
     $(document).ready(function () {
-      // Toggle to file input mode
-      $('#btn-toggle').click(() => {
-        $('#text-input-group').addClass('d-none');
-        $('#media-input-group').removeClass('d-none');
-        $('#chat-file').click();
-      });
 
       // Toggle back to text input mode
       $('#btn-toggle-back').click(() => {
         $('#media-input-group').addClass('d-none');
         $('#text-input-group').removeClass('d-none');
+        $('#chat-file').val('');
+      });
+      // Handle toggle
+      $('#btn-toggle').on('click', () => {
+        // Hide keyboard if open
+        $('#chat-message').blur();
+
+        // Toggle menu
+        $('#attachment-menu').toggleClass('d-none');
       });
 
+      // Auto hide when tapping outside (optional)
+      $(document).on('click', (e) => {
+        if (!$(e.target).closest('#attachment-menu, #btn-toggle').length) {
+          $('#attachment-menu').addClass('d-none');
+        }
+      });
+
+      $('.attachment-btn').on('click', function () {
+        const type = $(this).data('type');
+        const $input = $('#chat-file');
+
+        // Reset attributes
+        $input.removeAttr('accept').removeAttr('capture');
+
+        switch (type) {
+          case 'image':
+            $input.attr('accept', 'image/*');
+            break;
+          case 'camera':
+            $input.attr('accept', 'image/*').attr('capture', 'environment');
+            break;
+          case 'video':
+            $input.attr('accept', 'video/*');
+            break;
+          case 'audio':
+            $input.attr('accept', 'audio/*');
+            break;
+          case 'doc':
+            $input.attr('accept', '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.odt');
+            break;
+          case 'file':
+            break;
+        }
+
+        $('#attachment-menu').addClass('d-none'); 
+        $input.click(); 
+      });
+
+      $('#chat-file').on('change', function () {
+        const file = this.files[0];
+        if (!file) return;
+         $('#media-input-group').removeClass('d-none');
+         $('#text-input-group').addClass('d-none');
+      });
     });
+
   </script>
 </body>
 </html>
