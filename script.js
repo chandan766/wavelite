@@ -10,6 +10,8 @@ let peerId = null; // Global peerId variable
 const CONNECTION_TIMEOUT = 120000; // 120 seconds timeout for connection
 const CHUNK_TIMEOUT = 30000; // 30 seconds for chunk timeout
 const MAX_RETRIES = 5; // Maximum retries for missing chunks
+let mediaSendQueue = [];
+let isSendingFile = false;
 
 // File sending configuration
 // const CHUNK_SIZE = 16384; // 16KB chunks for WebRTC data channel
@@ -80,55 +82,33 @@ $(document).ready(() => {
   // Handle file sending on button click
   $('#btn-send-media').click(() => {
     if (!currentFile) {
-      showAlert("No file are selected!");
+      showAlert("No file is selected!");
       $('#media-input').click(); // Trigger file input if no file is selected
-    } else if (dataChannel && dataChannel.readyState === 'open') {
-      $("#btn-toggle-back").trigger("click");
-      console.log('Sending file, dataChannel state:', dataChannel.readyState);
-      const name = $('#chat-username').val() || 'Anonymous';
-      const messageId = Date.now().toString();
-      currentChunk = 0;
-      totalChunks = Math.ceil(currentFile.size / CHUNK_SIZE);
+      return;
+    }
 
-      // Store file reference for potential resending
-      activeTransfers.set(messageId, {
-        file: currentFile,
-        fileName: currentFile.name,
-        fileSize: currentFile.size,
-        fileType: currentFile.type || 'application/octet-stream',
-        totalChunks
-      });
+    // Create a safe unique ID for the queued item
+    const queueId = `queue-${Date.now()}`;
+    const fileToSend = {
+      file: currentFile,
+      queueId: queueId
+    };
 
-      // Send file metadata
-      const metadata = {
-        type: 'file',
-        name,
-        messageId,
-        fileName: currentFile.name,
-        fileSize: currentFile.size,
-        fileType: currentFile.type || 'application/octet-stream'
-      };
-      try {
-        dataChannel.send(JSON.stringify(metadata));
-        // Create URL for the sent file
-        const fileUrl = URL.createObjectURL(currentFile);
-        displayMessage(name, currentFile.name, true, 'file', fileUrl, messageId, 'sent', metadata.fileType);
+      // Show "Queued..." bar only if something is sending or already queued
+    if (isSendingFile || mediaSendQueue.length > 0) {
+      showQueuedProgress(queueId, currentFile.name);
+    }
 
-        // Show progress bar
-        showProgressBar(messageId, true);
-        // Start sending file chunks
-        sendFileChunks(messageId);
-      } catch (error) {
-        console.error('Error sending file:', error);
-        hideProgressBar(messageId);
-        activeTransfers.delete(messageId);
-        showAlert('Failed to send file. Please try again.');
-      }
-    } else {
-      console.warn('Cannot send file, dataChannel state:', dataChannel ? dataChannel.readyState : 'undefined');
-      showAlert('Please wait until the connection is established before sending a file.');
+    currentFile = null;
+    $('#chat-file').val('');
+    // Push to queue
+    mediaSendQueue.push(fileToSend);
+    
+    if (!isSendingFile) {
+      processNextFileInQueue();
     }
   });
+
 
   $('#reloadBtn').click(function() {
       location.reload(); 
@@ -154,16 +134,23 @@ $(document).ready(() => {
     }
   });
 
-    // Handle delete all button click
-  $('#delete-all-btn').click(() => {
-      fetch(DELETE_URL, {
+      // Handle delete all button click
+    $('#delete-all-btn').click(() => {
+    fetch(DELETE_URL, {
       method: "POST",
       body: new URLSearchParams({ peerId: '' }) 
     })
-      .then(res => res.text())
-      .then(result => showAlert(`Deleted all SDP entries:${result}`,false))
-      .catch(err => showAlert(`Error deleting SDP entries:${err}`));
-    });
+    .then(res => res.text())
+    .then(result => {
+      showAlert(`Deleted all SDP entries: ${result}`, false);
+      // Wait 3 seconds before reloading
+      setTimeout(() => {
+        location.reload();
+      }, 3000);
+    })
+    .catch(err => showAlert(`Error deleting SDP entries: ${err}`));
+  });
+
 
     // Handle Join button click
   $('#joinPeer').click(async function (e) {
@@ -250,7 +237,7 @@ $(document).on('change', '.stun-option', () => {
     return this.value;
   }).get();
 
-  if (selected.length < 2) {
+  if (selected.length < 1) {
     $('#stun-error').removeClass('d-none');
   } else {
     $('#stun-error').addClass('d-none');
@@ -371,6 +358,7 @@ async function setupOfferer(peerId) {
         $('#peerIdSubmit').prop('disabled', false).text('Connect');
         $('#joinPeer').prop('disabled', false).text('Join');
         showAlert('Connection timed out. Please try again or check peer ID.');
+        $('#delete-all-btn').click();
         return;
       }
       const answerEntry = await fetchSDP(peerId, 'answer');
@@ -554,7 +542,7 @@ function setupDataChannel() {
           try {
             const received = new Blob(receivedBuffers, { type: receivedFileInfo.fileType || 'application/octet-stream' });
             const url = URL.createObjectURL(received);
-            displayMessage(receivedFileInfo.name, receivedFileInfo.fileName, false, 'file', url, receivedFileInfo.messageId, 'delivered', receivedFileInfo.fileType);
+            displayMessage(receivedFileInfo.name, receivedFileInfo.fileName, false, 'file', url, receivedFileInfo.messageId, 'delivered', receivedFileInfo.fileType,receivedFileInfo.fileSize);
             hideProgressBar(receivedFileInfo.messageId);
             receivedBuffers = [];
             receivedFileInfo = null;
@@ -641,10 +629,11 @@ function setupDataChannel() {
   };
 }
 
-function sendFileChunks(messageId) {
+function sendFileChunks(messageId, onComplete = () => {}) {
   const transfer = activeTransfers.get(messageId);
+
   if (!transfer || currentChunk * CHUNK_SIZE >= transfer.fileSize) {
-    console.log('File sending completed for messageId:', messageId);
+    console.log('✅ File sending completed for messageId:', messageId);
     $('#chat-file').val('');
     currentFile = null;
     currentChunk = 0;
@@ -652,18 +641,20 @@ function sendFileChunks(messageId) {
     hideProgressBar(messageId);
     activeTransfers.delete(messageId);
     retryCounts.delete(messageId);
+    onComplete(); // Notify the queue to process next
     return;
-  }
+}
 
   // Check buffer to prevent overflow
   if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
     console.log(`Buffer full (${dataChannel.bufferedAmount} bytes), waiting for messageId: ${messageId}`);
-    setTimeout(() => sendFileChunks(messageId), 200); // Increased delay to 200ms
+    setTimeout(() => sendFileChunks(messageId, onComplete), 200); // Increased delay to 200ms
     return;
   }
 
   const start = currentChunk * CHUNK_SIZE;
   const end = Math.min(start + CHUNK_SIZE, transfer.fileSize);
+  const slice = transfer.file.slice(start, end);
   fileReader.onload = () => {
     try {
       dataChannel.send(fileReader.result);
@@ -671,24 +662,24 @@ function sendFileChunks(messageId) {
       currentChunk++;
       // Update progress bar
       updateProgressBar(messageId, (currentChunk / transfer.totalChunks) * 100);
-      setTimeout(() => sendFileChunks(messageId), 10); // Small delay to prevent stack overflow
+      setTimeout(() => sendFileChunks(messageId, onComplete), 10); // Small delay to prevent stack overflow
     } catch (error) {
       console.error('Error sending file chunk for messageId:', messageId, error);
       hideProgressBar(messageId);
       activeTransfers.delete(messageId);
-      showAlert('Failed to send file chunk. Please try again.');
       retryCounts.delete(messageId);
-      throw error;
+      showAlert('Failed to send file chunk. Please try again.');
+      onComplete();
     }
   };
   fileReader.onerror = () => {
     console.error('FileReader error for messageId:', messageId);
     hideProgressBar(messageId);
     activeTransfers.delete(messageId);
-    showAlert('Failed to read file chunk. Please try again.');
     retryCounts.delete(messageId);
+    showAlert('Failed to read file chunk. Please try again.');
+    onComplete();
   };
-  const slice = transfer.file.slice(start, end);
   fileReader.readAsArrayBuffer(slice);
 }
 
@@ -730,7 +721,7 @@ function showProgressBar(messageId, isSender) {
     : (receivedFileInfo?.fileName || 'Unknown File');
   $('#chat-display').append(`
     <div class="chat-message ${alignClass} px-3" id="progress-${messageId}">
-      <div class="file-name mt-2" style="font-size: 14px; font-weight: 500;">${fileName}</div>
+      <div class="file-name mt-2" style="font-size: 14px; font-weight: 500;">${truncateName(fileName,25)}</div>
       <div class="progress mt-2" style="height: 30px;">
         <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" 
              role="progressbar" 
@@ -759,6 +750,22 @@ function hideProgressBar(messageId) {
   $(`#progress-${messageId}`).remove();
 }
 
+function showQueuedProgress(fakeId, fileName) {
+  $('#chat-display').append(`
+    <div class="chat-message self px-3" id="${fakeId}">
+      <div class="file-name mt-2" style="font-size: 14px; font-weight: 500;">${truncateName(fileName, 25)}</div>
+      <div class="progress mt-2" style="height: 30px;">
+        <div class="progress-bar bg-secondary text-white" 
+             style="width: 100%; font-size: 14px; line-height: 30px;">
+          Queued...
+        </div>
+      </div>
+    </div>
+  `);
+  $('#chat-display').scrollTop($('#chat-display')[0].scrollHeight);
+}
+
+
 function transitionToChat() {
   if ($('#chat-section').hasClass('d-none')) {
     $('#login-section').removeClass('d-flex').addClass('d-none');
@@ -768,7 +775,7 @@ function transitionToChat() {
   }
 }
 
-function displayMessage(name, content, isSelf, type, file, messageId, status, fileType = null) {
+function displayMessage(name, content, isSelf, type, file, messageId, status, fileType = null,fileSize = null) {
   const alignClass = isSelf ? 'self' : 'other';
   const statusIcon = isSelf ? `<span class="status-icon text-muted ms-2"><i class="fas fa-check-double"></i></span>` : '';
   const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -779,14 +786,14 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
     const isAudio = fileType && fileType.startsWith('audio/');
     const isVideo = fileType && fileType.startsWith('video/');
     const downloadButton = `<a href="${file}" download="${content}" class="btn btn-sm btn-secondary w-100 mt-2 d-block"><i class="fas fa-download me-2"></i>Download</a>`;
-    const fileNameDisplay = `<div class="file-name" style="font-size: 13px; font-weight: 500;">${truncateName(content,20)}</div>`;
-
+    const fileNameDisplay = `<div class="file-name" style="font-size: 13px; font-weight: 500;">${truncateName(content,25)}</div>`;
+    const fileSizeAndType = `<div class="file-name" style="font-size: 10px;font-weight:500;">${formatBytes(fileSize)} • <span class="text-uppercase">${content.slice(content.lastIndexOf('.') + 1)}</span></div>`
     if (isImage) {
       messageContent = `
       <div class="image-wrapper" style="max-width: 100%; overflow: hidden;">
         <img src="${file}" alt="${content}" class="img-fluid rounded mt-2" style="width: 100%; height: auto; object-fit: contain;" />
       </div>
-      <br>${fileNameDisplay} ${downloadButton}`;
+      <br>${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`;
     } else if (isAudio) {
         const containerId = `waveform-${Date.now()}`;
         messageContent = `
@@ -805,6 +812,7 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
           </div>
 
           <div class="text-end mb-3">
+            ${fileSizeAndType}
             ${downloadButton}
           </div>
         `;
@@ -823,12 +831,12 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
     }
     else if (isVideo) {
       messageContent = `
-        <div class="plyr-wrapper rounded overflow-hidden mt-2" style="max-width: 100%;">
-          <video id="player-${Date.now()}" controls class="plyr__video-embed w-100" style="object-fit: contain; max-height: 250px;">
-            <source src="${file}" type="video/webm" />
-          </video>
-        </div>
-        <br>${fileNameDisplay} ${downloadButton}`;
+      <div class="plyr-wrapper rounded overflow-hidden mt-2" style="max-width: 100%;">
+        <video id="player-${Date.now()}" class="plyr w-100" controls playsinline style="object-fit: contain; min-height: 300px;">
+          <source src="${file}" type="video/webm" />
+        </video>
+      </div>
+        <br>${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`;
       setTimeout(() => {
         const players = Plyr.setup('video');
       }, 0);
@@ -854,7 +862,7 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
       } else if (fileType.includes('text')) {
         fileIconClass = 'fa-file-lines text-secondary';
       }
-      messageContent = `<i class="fas ${fileIconClass} me-2 fs-4"></i> ${fileNameDisplay}${downloadButton}`;
+      messageContent = `<i class="fas ${fileIconClass} me-2 fs-4"></i> ${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`;
     }
   }
 
@@ -925,10 +933,10 @@ async function startJoinConnection(peerId) {
 
 // Initialize checkboxes from localStorage or default to 2
 function loadStunSettings() {
-  const defaultStuns = ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'];
+  const defaultStuns = ['stun:stun.l.google.com:19302'];
   const savedStuns = JSON.parse(localStorage.getItem("selectedStunServers") || "[]");
 
-  const selected = savedStuns.length >= 2 ? savedStuns : defaultStuns;
+  const selected = savedStuns.length >= 1 ? savedStuns : defaultStuns;
   $('.stun-option').each(function () {
     $(this).prop('checked', selected.includes(this.value));
   });
@@ -989,4 +997,68 @@ function togglePlayPause(containerId) {
     icon.classList.remove('fa-pause');
     icon.classList.add('fa-play');
   }
+}
+
+function processNextFileInQueue() {
+  if (mediaSendQueue.length === 0) {
+    isSendingFile = false;
+    return;
+  }
+
+  const queuedItem = mediaSendQueue.shift(); // contains { file, queueId }
+  const file = queuedItem.file;
+  const queueId = queuedItem.queueId;
+  isSendingFile = true;
+  if (queueId) {
+    $(`#${queueId}`).remove();
+  }
+  const name = $('#chat-username').val() || 'Anonymous';
+  const messageId = Date.now().toString();
+  currentChunk = 0;
+  totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+  activeTransfers.set(messageId, {
+    file,
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type || 'application/octet-stream',
+    totalChunks
+  });
+
+  const metadata = {
+    type: 'file',
+    name,
+    messageId,
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type || 'application/octet-stream'
+  };
+
+  try {
+    dataChannel.send(JSON.stringify(metadata));
+    const fileUrl = URL.createObjectURL(file);
+    displayMessage(name, file.name, true, 'file', fileUrl, messageId, 'sent', metadata.fileType,metadata.fileSize);
+    showProgressBar(messageId, true);
+    sendFileChunks(messageId, () => {
+      isSendingFile = false;
+      processNextFileInQueue();
+    });
+  } catch (error) {
+    console.error('Error sending file:', error);
+    hideProgressBar(messageId);
+    activeTransfers.delete(messageId);
+    showAlert('Failed to send file. Please try again.');
+    isSendingFile = false;
+    processNextFileInQueue();
+  }
+}
+
+function formatBytes(sizeInBytes) {
+  const units = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+  if (sizeInBytes === 0) return '0 Bytes';
+
+  const i = Math.floor(Math.log(sizeInBytes) / Math.log(1024));
+  const size = sizeInBytes / Math.pow(1024, i);
+
+  return `${size < 10 ? size.toFixed(1) : Math.round(size)} ${units[i]}`;
 }
