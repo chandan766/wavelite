@@ -424,9 +424,8 @@ async function setupAnswerer(offerEntry) {
 
 function createPeerConnection() {
   const savedStuns = JSON.parse(localStorage.getItem("selectedStunServers") || "[]");
-  const stunServers = savedStuns.length >= 2 ? savedStuns : [
-    'stun:stun.l.google.com:19302',
-    'stun:stun1.l.google.com:19302'
+  const stunServers = savedStuns.length >= 1 ? savedStuns : [
+    'stun:global.stun.twilio.com:3478'
   ];
 
   const pc = new RTCPeerConnection({
@@ -933,7 +932,7 @@ async function startJoinConnection(peerId) {
 
 // Initialize checkboxes from localStorage or default to 2
 function loadStunSettings() {
-  const defaultStuns = ['stun:stun.l.google.com:19302'];
+  const defaultStuns = ['stun:global.stun.twilio.com:3478'];
   const savedStuns = JSON.parse(localStorage.getItem("selectedStunServers") || "[]");
 
   const selected = savedStuns.length >= 1 ? savedStuns : defaultStuns;
