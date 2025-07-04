@@ -12,6 +12,10 @@ const CHUNK_TIMEOUT = 30000; // 30 seconds for chunk timeout
 const MAX_RETRIES = 5; // Maximum retries for missing chunks
 let mediaSendQueue = [];
 let isSendingFile = false;
+const NUM_MEDIA_CHANNELS = 3;
+let mediaChannels = [];
+let currentSendingChannel = 0;
+let mediaReceivingChunks = {};
 
 // File sending configuration
 // const CHUNK_SIZE = 16384; // 16KB chunks for WebRTC data channel
@@ -339,6 +343,13 @@ async function startConnection(peerId) {
 async function setupOfferer(peerId) {
   localConnection = createPeerConnection();
   dataChannel = localConnection.createDataChannel("chat");
+  mediaChannels = []; 
+  for (let i = 0; i < NUM_MEDIA_CHANNELS; i++) {
+    const channel = localConnection.createDataChannel(`media-${i}`);
+    setupMediaDataChannel(channel, i);
+    mediaChannels.push(channel);
+  }
+
   setupDataChannel();
   updateConnectionStatus('Offer Creating...','10',false);
   try {
@@ -387,10 +398,18 @@ async function setupOfferer(peerId) {
 
 async function setupAnswerer(offerEntry) {
   localConnection = createPeerConnection();
-
   localConnection.ondatachannel = (event) => {
-    dataChannel = event.channel;
-    setupDataChannel();
+    const channel = event.channel;
+    if (channel.label === "chat") {
+      dataChannel = channel;
+      setupDataChannel();
+    } else if (channel.label.startsWith("media-")) {
+      const index = parseInt(channel.label.split("-")[1]);
+      if (!isNaN(index)) {
+        mediaChannels[index] = channel;
+        setupMediaDataChannel(channel, index);
+      }
+    }
   };
 
   try {
@@ -628,12 +647,69 @@ function setupDataChannel() {
   };
 }
 
+function setupMediaDataChannel(channel, index) {
+  channel.onmessage = (e) => {
+    if (!receivedFileInfo || !receivedFileInfo.messageId) return;
+
+    const messageId = receivedFileInfo.messageId;
+
+    if (!mediaReceivingChunks[messageId]) {
+      mediaReceivingChunks[messageId] = {
+        buffers: [],
+        bytesReceived: 0,
+        timeoutId: null
+      };
+    }
+
+    const transfer = mediaReceivingChunks[messageId];
+    const data = e.data;
+    transfer.buffers.push(data);
+    transfer.bytesReceived += data.byteLength;
+
+    updateProgressBar(messageId, (transfer.bytesReceived / receivedFileInfo.fileSize) * 100);
+
+    if (transfer.bytesReceived >= receivedFileInfo.fileSize) {
+      clearTimeout(transfer.timeoutId);
+      try {
+        const received = new Blob(transfer.buffers, { type: receivedFileInfo.fileType || 'application/octet-stream' });
+        const url = URL.createObjectURL(received);
+        displayMessage(receivedFileInfo.name, receivedFileInfo.fileName, false, 'file', url, messageId, 'delivered', receivedFileInfo.fileType, receivedFileInfo.fileSize);
+        hideProgressBar(messageId);
+        retryCounts.delete(messageId);
+        receivedFileInfo = null;
+        delete mediaReceivingChunks[messageId];
+      } catch (err) {
+        console.error("Failed to reconstruct file:", err);
+        showAlert('Failed to reconstruct file.');
+      }
+    } else {
+      clearTimeout(transfer.timeoutId);
+      transfer.timeoutId = setTimeout(() => {
+        if (transfer.bytesReceived < receivedFileInfo.fileSize) {
+          showAlert("Transfer incomplete for messageId: " + messageId + " on channel " + index);
+        }
+      }, CHUNK_TIMEOUT);
+    }
+  };
+
+  channel.onerror = (err) => {
+    console.error("Media channel error (index " + index + "):", err);
+    showAlert("Error on media channel " + index);
+  };
+
+  channel.onopen = () => {
+    console.log("Media data channel " + index + " opened");
+  };
+}
+
+
 function sendFileChunks(messageId, onComplete = () => {}) {
   const transfer = activeTransfers.get(messageId);
 
   if (!transfer || currentChunk * CHUNK_SIZE >= transfer.fileSize) {
     console.log('✅ File sending completed for messageId:', messageId);
     $('#chat-file').val('');
+    $('#btn-toggle-back').click();
     currentFile = null;
     currentChunk = 0;
     totalChunks = 0;
@@ -642,10 +718,10 @@ function sendFileChunks(messageId, onComplete = () => {}) {
     retryCounts.delete(messageId);
     onComplete(); // Notify the queue to process next
     return;
-}
+  }
 
-  // Check buffer to prevent overflow
-  if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
+  const selectedChannel = mediaChannels[currentSendingChannel];
+  if (!selectedChannel || selectedChannel.bufferedAmount > BUFFER_THRESHOLD) {
     console.log(`Buffer full (${dataChannel.bufferedAmount} bytes), waiting for messageId: ${messageId}`);
     setTimeout(() => sendFileChunks(messageId, onComplete), 200); // Increased delay to 200ms
     return;
@@ -656,12 +732,18 @@ function sendFileChunks(messageId, onComplete = () => {}) {
   const slice = transfer.file.slice(start, end);
   fileReader.onload = () => {
     try {
-      dataChannel.send(fileReader.result);
-      console.log(`Sent file chunk ${currentChunk + 1}/${transfer.totalChunks} for messageId: ${messageId}`);
+      const selectedChannel = mediaChannels[currentSendingChannel];
+      if (selectedChannel && selectedChannel.readyState === "open") {
+        selectedChannel.send(fileReader.result);
+        console.log(`📤 Sent file chunk ${currentChunk + 1}/${transfer.totalChunks} via channel ${currentSendingChannel} for messageId: ${messageId}`);
+        currentSendingChannel = (currentSendingChannel + 1) % NUM_MEDIA_CHANNELS;
+      } else {
+        console.warn("⚠️ Selected media channel not open. Falling back to default dataChannel.");
+        dataChannel.send(fileReader.result);
+      }
       currentChunk++;
-      // Update progress bar
       updateProgressBar(messageId, (currentChunk / transfer.totalChunks) * 100);
-      setTimeout(() => sendFileChunks(messageId, onComplete), 10); // Small delay to prevent stack overflow
+      setTimeout(() => sendFileChunks(messageId, onComplete), 10);
     } catch (error) {
       console.error('Error sending file chunk for messageId:', messageId, error);
       hideProgressBar(messageId);
@@ -671,6 +753,7 @@ function sendFileChunks(messageId, onComplete = () => {}) {
       onComplete();
     }
   };
+
   fileReader.onerror = () => {
     console.error('FileReader error for messageId:', messageId);
     hideProgressBar(messageId);
@@ -679,6 +762,9 @@ function sendFileChunks(messageId, onComplete = () => {}) {
     showAlert('Failed to read file chunk. Please try again.');
     onComplete();
   };
+  if (!selectedChannel) {
+    console.warn("No media channel selected. Using default dataChannel.");
+  }
   fileReader.readAsArrayBuffer(slice);
 }
 
@@ -1049,6 +1135,55 @@ function processNextFileInQueue() {
     showAlert('Failed to send file. Please try again.');
     isSendingFile = false;
     processNextFileInQueue();
+  }
+}
+
+function handleIncomingChunk(arrayBuffer, channelLabel) {
+  if (!receivedFileInfo) return;
+
+  const id = receivedFileInfo.messageId;
+
+  if (!mediaReceivingChunks[id]) {
+    mediaReceivingChunks[id] = {
+      buffers: [],
+      receivedBytes: 0,
+      fileInfo: receivedFileInfo
+    };
+  }
+
+  mediaReceivingChunks[id].buffers.push(arrayBuffer);
+  mediaReceivingChunks[id].receivedBytes += arrayBuffer.byteLength;
+
+  const receivedSize = mediaReceivingChunks[id].receivedBytes;
+  const totalSize = receivedFileInfo.fileSize;
+
+  updateProgressBar(id, (receivedSize / totalSize) * 100);
+
+  if (receivedSize >= totalSize) {
+    try {
+      const blob = new Blob(mediaReceivingChunks[id].buffers, {
+        type: receivedFileInfo.fileType || "application/octet-stream"
+      });
+      const url = URL.createObjectURL(blob);
+      displayMessage(
+        receivedFileInfo.name,
+        receivedFileInfo.fileName,
+        false,
+        "file",
+        url,
+        id,
+        "delivered",
+        receivedFileInfo.fileType,
+        receivedFileInfo.fileSize
+      );
+    } catch (err) {
+      console.error(`Error creating blob from chunks for ${id}:`, err);
+      showAlert("Failed to reconstruct received file.");
+    }
+
+    hideProgressBar(id);
+    delete mediaReceivingChunks[id];
+    receivedFileInfo = null;
   }
 }
 
