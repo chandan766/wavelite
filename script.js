@@ -16,6 +16,7 @@ const NUM_MEDIA_CHANNELS = 3;
 let mediaChannels = [];
 let currentSendingChannel = 0;
 let mediaReceivingChunks = {};
+let pendingMediaChunks = [];
 
 // File sending configuration
 // const CHUNK_SIZE = 16384; // 16KB chunks for WebRTC data channel
@@ -23,8 +24,6 @@ const CHUNK_SIZE = 65536; // 64KB chunks for WebRTC data channel
 const BUFFER_THRESHOLD = 262144; // 256KB buffer threshold to prevent overflow
 let fileReader = new FileReader();
 let currentFile = null;
-let currentChunk = 0;
-let totalChunks = 0;
 let retryCounts = new Map(); // Track retries per messageId
 let activeTransfers = new Map(); // Store file references for resending
 let receivedFileInfo = null; // Global to store received file metadata
@@ -621,9 +620,23 @@ function setupDataChannel() {
         console.log(`Received file metadata for ${msg.fileName}, size: ${msg.fileSize}, type: ${msg.fileType}`);
         // Show progress bar for receiver
         showProgressBar(msg.messageId, false);
+        if (pendingMediaChunks.length > 0) {
+          console.log("🔄 Processing pending media chunks...");
+          pendingMediaChunks.forEach((e, index) => {
+            if (e) {
+              try {
+                // Reuse the same logic from your channel.onmessage
+                mediaChannels[index]?.onmessage?.({ data: e });
+              } catch (err) {
+                console.error("Error processing pending chunk:", err);
+              }
+            }
+          });
+          pendingMediaChunks = []
+        }
       } else if (msg.type === 'resend_request') {
-        console.log(`Received resend request for messageId: ${msg.messageId}, chunk: ${msg.chunkIndex}`);
-        resendFileChunk(msg.messageId, msg.chunkIndex);
+        console.log(`🔁 Resend request for messageId: ${msg.messageId}, chunk: [${msg.majorIndex}-${msg.chunkIndex}]`);
+        resendFileChunk(msg.messageId, msg.majorIndex, msg.chunkIndex);
       }else if (msg.type === 'username') {
         console.log("Received peer username:", msg.name);
         $('#headerBtnName').text(msg.name).addClass('text-capitalize');
@@ -649,47 +662,110 @@ function setupDataChannel() {
 
 function setupMediaDataChannel(channel, index) {
   channel.onmessage = (e) => {
-    if (!receivedFileInfo || !receivedFileInfo.messageId) return;
+    const data = new Uint8Array(e.data);
+    const metadata = new Uint32Array(data.slice(0, 12).buffer); // 3 * 4 bytes = 12
+    const majorIndex = metadata[0];
+    const chunkIndex = metadata[1];
+    const totalChunks = metadata[2];
+    const payload = data.slice(12);
 
+   if (!receivedFileInfo) {
+      console.warn("Received chunk but no file info available yet. Queuing it.");
+      return;
+    }
     const messageId = receivedFileInfo.messageId;
 
     if (!mediaReceivingChunks[messageId]) {
       mediaReceivingChunks[messageId] = {
-        buffers: [],
+        parts: [],
         bytesReceived: 0,
-        timeoutId: null
+        expectedSize: receivedFileInfo.fileSize,
+        totalParts: 3, // assuming 3 media channels
+        completed: false
       };
     }
 
     const transfer = mediaReceivingChunks[messageId];
-    const data = e.data;
-    transfer.buffers.push(data);
-    transfer.bytesReceived += data.byteLength;
+    if (transfer.completed) return;
 
-    updateProgressBar(messageId, (transfer.bytesReceived / receivedFileInfo.fileSize) * 100);
-
-    if (transfer.bytesReceived >= receivedFileInfo.fileSize) {
-      clearTimeout(transfer.timeoutId);
-      try {
-        const received = new Blob(transfer.buffers, { type: receivedFileInfo.fileType || 'application/octet-stream' });
-        const url = URL.createObjectURL(received);
-        displayMessage(receivedFileInfo.name, receivedFileInfo.fileName, false, 'file', url, messageId, 'delivered', receivedFileInfo.fileType, receivedFileInfo.fileSize);
-        hideProgressBar(messageId);
-        retryCounts.delete(messageId);
-        receivedFileInfo = null;
-        delete mediaReceivingChunks[messageId];
-      } catch (err) {
-        console.error("Failed to reconstruct file:", err);
-        showAlert('Failed to reconstruct file.');
-      }
-    } else {
-      clearTimeout(transfer.timeoutId);
-      transfer.timeoutId = setTimeout(() => {
-        if (transfer.bytesReceived < receivedFileInfo.fileSize) {
-          showAlert("Transfer incomplete for messageId: " + messageId + " on channel " + index);
-        }
-      }, CHUNK_TIMEOUT);
+    if (!transfer.parts[majorIndex]) {
+      transfer.parts[majorIndex] = new Array(totalChunks).fill(null);; // Pre-fill with correct size
     }
+
+    if (!transfer.parts[majorIndex][chunkIndex]) {
+      transfer.parts[majorIndex][chunkIndex] = payload;
+      transfer.bytesReceived += payload.byteLength;
+    }
+
+    // Track last received time
+    if (!transfer.lastReceivedTime) transfer.lastReceivedTime = {};
+    transfer.lastReceivedTime[`${majorIndex}-${chunkIndex}`] = Date.now();
+
+    // Start resend timeout checker
+    clearTimeout(transfer.resendTimeoutId);
+    transfer.resendTimeoutId = setTimeout(() => {
+      const allChunksPresent = transfer.parts.every(part => part && part.every(c => c));
+      if (!allChunksPresent) {
+        for (let m = 0; m < transfer.parts.length; m++) {
+          if (!Array.isArray(transfer.parts[m])) continue;
+          for (let c = 0; c < transfer.parts[m].length; c++) {
+            if (!transfer.parts[m][c]) {
+              console.warn(`⏳ Missing chunk detected: [${m}-${c}] for messageId ${messageId}`);
+              dataChannel.send(JSON.stringify({
+                type: 'resend_request',
+                messageId,
+                majorIndex: m,
+                chunkIndex: c
+              }));
+              return; // One resend at a time
+            }
+          }
+        }
+      }
+    }, CHUNK_TIMEOUT);
+
+
+    updateProgressBar(messageId, (transfer.bytesReceived / transfer.expectedSize) * 100);
+    
+    // Check if complete
+    const isComplete = transfer.parts.length === 3 &&
+    transfer.parts.every(part =>
+      Array.isArray(part) &&
+      part.length === totalChunks &&
+      part.every(chunk => chunk !== null && chunk !== undefined)
+    );
+
+
+    if (!isComplete) {
+      console.warn(`❗ File assembly attempted before all chunks arrived. Parts:`, transfer.parts);
+      return; // Don't proceed
+    }
+    transfer.completed = true;
+    const blobParts = [];
+    for (const part of transfer.parts) {
+      for (const chunk of part) {
+        blobParts.push(chunk);
+      }
+    }
+
+    const finalBlob = new Blob(blobParts, { type: receivedFileInfo.fileType });
+    const url = URL.createObjectURL(finalBlob);
+
+    displayMessage(
+      receivedFileInfo.name,
+      receivedFileInfo.fileName,
+      false,
+      'file',
+      url,
+      messageId,
+      'delivered',
+      receivedFileInfo.fileType,
+      receivedFileInfo.fileSize
+    );
+
+    hideProgressBar(messageId);
+    delete mediaReceivingChunks[messageId];
+    receivedFileInfo = null;
   };
 
   channel.onerror = (err) => {
@@ -702,100 +778,157 @@ function setupMediaDataChannel(channel, index) {
   };
 }
 
-
 function sendFileChunks(messageId, onComplete = () => {}) {
   const transfer = activeTransfers.get(messageId);
+  if (!transfer) return;
 
-  if (!transfer || currentChunk * CHUNK_SIZE >= transfer.fileSize) {
-    console.log('✅ File sending completed for messageId:', messageId);
-    $('#chat-file').val('');
-    $('#btn-toggle-back').click();
-    currentFile = null;
-    currentChunk = 0;
-    totalChunks = 0;
-    hideProgressBar(messageId);
-    activeTransfers.delete(messageId);
-    retryCounts.delete(messageId);
-    onComplete(); // Notify the queue to process next
-    return;
+  const file = transfer.file;
+  const fileSize = file.size;
+  const chunkSize = CHUNK_SIZE;
+  const numChannels = mediaChannels.length;
+
+  // 1. Split file into 3 major parts
+  const partSize = Math.ceil(fileSize / numChannels);
+  const chunkParts = [];
+
+  for (let i = 0; i < numChannels; i++) {
+    const start = i * partSize;
+    const end = Math.min(start + partSize, fileSize);
+    chunkParts[i] = [];
+
+    for (let offset = start; offset < end; offset += chunkSize) {
+      const slice = file.slice(offset, Math.min(offset + chunkSize, end));
+      chunkParts[i].push(slice);
+    }
   }
 
-  const selectedChannel = mediaChannels[currentSendingChannel];
-  if (!selectedChannel || selectedChannel.bufferedAmount > BUFFER_THRESHOLD) {
-    console.log(`Buffer full (${dataChannel.bufferedAmount} bytes), waiting for messageId: ${messageId}`);
-    setTimeout(() => sendFileChunks(messageId, onComplete), 200); // Increased delay to 200ms
-    return;
-  }
+  // 2. State tracking
+  const totalSubChunks = chunkParts.flat().length;
+  let totalSentChunks = 0;
+  let progressUpdated = 0;
 
-  const start = currentChunk * CHUNK_SIZE;
-  const end = Math.min(start + CHUNK_SIZE, transfer.fileSize);
-  const slice = transfer.file.slice(start, end);
-  fileReader.onload = () => {
-    try {
-      const selectedChannel = mediaChannels[currentSendingChannel];
-      if (selectedChannel && selectedChannel.readyState === "open") {
-        selectedChannel.send(fileReader.result);
-        console.log(`📤 Sent file chunk ${currentChunk + 1}/${transfer.totalChunks} via channel ${currentSendingChannel} for messageId: ${messageId}`);
-        currentSendingChannel = (currentSendingChannel + 1) % NUM_MEDIA_CHANNELS;
-      } else {
-        console.warn("⚠️ Selected media channel not open. Falling back to default dataChannel.");
-        dataChannel.send(fileReader.result);
+  // 3. Start sending for each channel in parallel
+  chunkParts.forEach((partChunks, majorIndex) => {
+    let subIndex = 0;
+
+    const sendNext = () => {
+      if (subIndex >= partChunks.length) return;
+
+      const channel = mediaChannels[majorIndex];
+      if (!channel || channel.readyState !== 'open') {
+        console.warn(`Channel ${majorIndex} not ready`);
+        setTimeout(sendNext, 100);
+        return;
       }
-      currentChunk++;
-      updateProgressBar(messageId, (currentChunk / transfer.totalChunks) * 100);
-      setTimeout(() => sendFileChunks(messageId, onComplete), 10);
-    } catch (error) {
-      console.error('Error sending file chunk for messageId:', messageId, error);
+
+      if (channel.bufferedAmount > 4 * 1024 * 1024) { // 4MB threshold
+        // Too much pending in the buffer, wait
+        setTimeout(sendNext, 100);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const meta = new Uint32Array([
+            majorIndex,
+            subIndex,
+            partChunks.length
+          ]);
+          const data = new Uint8Array(reader.result);
+          const combined = new Uint8Array(meta.byteLength + data.byteLength);
+          combined.set(new Uint8Array(meta.buffer), 0);
+          combined.set(data, meta.byteLength);
+          channel.send(combined.buffer);
+
+          totalSentChunks++;
+          const percentage = (totalSentChunks / totalSubChunks) * 100;
+          if (percentage - progressUpdated >= 1) {
+            progressUpdated = percentage;
+            updateProgressBar(messageId, percentage);
+          }
+
+          subIndex++;
+          setTimeout(sendNext, 0); // Non-blocking
+        } catch (err) {
+          console.error('❌ Send error:', err);
+          hideProgressBar(messageId);
+          showAlert('Failed to send chunk');
+          onComplete();
+        }
+      };
+
+      reader.onerror = () => {
+        console.error('❌ FileReader error');
+        hideProgressBar(messageId);
+        showAlert('Failed to read chunk');
+        onComplete();
+      };
+
+      reader.readAsArrayBuffer(partChunks[subIndex]);
+    };
+
+    sendNext(); // Begin sending on this channel
+  });
+
+  // 4. Completion monitor (poll for completion)
+  const checkComplete = setInterval(() => {
+    if (totalSentChunks >= totalSubChunks) {
+      clearInterval(checkComplete);
+      console.log('✅ File sending complete for messageId:', messageId);
       hideProgressBar(messageId);
+      $('#chat-file').val('');
+      $('#btn-toggle-back').click();
+      currentFile = null;
       activeTransfers.delete(messageId);
       retryCounts.delete(messageId);
-      showAlert('Failed to send file chunk. Please try again.');
       onComplete();
     }
-  };
-
-  fileReader.onerror = () => {
-    console.error('FileReader error for messageId:', messageId);
-    hideProgressBar(messageId);
-    activeTransfers.delete(messageId);
-    retryCounts.delete(messageId);
-    showAlert('Failed to read file chunk. Please try again.');
-    onComplete();
-  };
-  if (!selectedChannel) {
-    console.warn("No media channel selected. Using default dataChannel.");
-  }
-  fileReader.readAsArrayBuffer(slice);
+  }, 300);
 }
 
-function resendFileChunk(messageId, chunkIndex) {
+
+function resendFileChunk(messageId, majorIndex, chunkIndex) {
   const transfer = activeTransfers.get(messageId);
-  if (!transfer || chunkIndex * CHUNK_SIZE >= transfer.fileSize) {
-    console.warn(`Cannot resend chunk ${chunkIndex} for messageId ${messageId}: File or chunk out of range`);
+  if (!transfer || !transfer.chunkParts) {
+    console.warn(`Cannot resend chunk: missing transfer info or chunkParts`);
     return;
   }
 
-  if (dataChannel.bufferedAmount > BUFFER_THRESHOLD) {
-    console.log(`Buffer full during resend (${dataChannel.bufferedAmount} bytes), retrying for messageId: ${messageId}`);
-    setTimeout(() => resendFileChunk(messageId, chunkIndex), 200);
+  const partChunks = transfer.chunkParts[majorIndex];
+  if (!partChunks || !partChunks[chunkIndex]) {
+    console.warn(`Chunk not found for resend: major ${majorIndex}, index ${chunkIndex}`);
     return;
   }
 
-  const start = chunkIndex * CHUNK_SIZE;
-  const end = Math.min(start + CHUNK_SIZE, transfer.fileSize);
-  fileReader.onload = () => {
+  const channel = mediaChannels[majorIndex];
+  if (!channel || channel.readyState !== 'open') {
+    console.warn(`Channel ${majorIndex} not ready for resend`);
+    setTimeout(() => resendFileChunk(messageId, majorIndex, chunkIndex), 200);
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
     try {
-      dataChannel.send(fileReader.result);
-      console.log(`Resent file chunk ${chunkIndex + 1}/${transfer.totalChunks} for messageId ${messageId}`);
+      const meta = new Uint32Array([majorIndex, chunkIndex, partChunks.length]);
+      const data = new Uint8Array(reader.result);
+      const combined = new Uint8Array(meta.byteLength + data.byteLength);
+      combined.set(new Uint8Array(meta.buffer), 0);
+      combined.set(data, meta.byteLength);
+
+      channel.send(combined.buffer);
+      console.log(`✅ Resent chunk [${majorIndex}-${chunkIndex}] for messageId: ${messageId}`);
     } catch (error) {
-      console.error(`Error resending file chunk ${chunkIndex} for messageId ${messageId}:`, error);
+      console.error(`❌ Resend failed:`, error);
     }
   };
-  fileReader.onerror = () => {
-    console.error(`FileReader error during resend for messageId: ${messageId}`);
+
+  reader.onerror = () => {
+    console.error(`❌ FileReader error during resend for [${majorIndex}-${chunkIndex}]`);
   };
-  const slice = transfer.file.slice(start, end);
-  fileReader.readAsArrayBuffer(slice);
+
+  reader.readAsArrayBuffer(partChunks[chunkIndex]);
 }
 
 function showProgressBar(messageId, isSender) {
@@ -1102,13 +1235,29 @@ function processNextFileInQueue() {
   currentChunk = 0;
   totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
-  activeTransfers.set(messageId, {
-    file,
-    fileName: file.name,
-    fileSize: file.size,
-    fileType: file.type || 'application/octet-stream',
-    totalChunks
-  });
+ const chunkParts = [];
+const numChannels = mediaChannels.length;
+const partSize = Math.ceil(file.size / numChannels);
+
+for (let i = 0; i < numChannels; i++) {
+  const start = i * partSize;
+  const end = Math.min(start + partSize, file.size);
+  chunkParts[i] = [];
+
+  for (let offset = start; offset < end; offset += CHUNK_SIZE) {
+    const slice = file.slice(offset, Math.min(offset + CHUNK_SIZE, end));
+    chunkParts[i].push(slice);
+  }
+}
+
+activeTransfers.set(messageId, {
+  file,
+  fileName: file.name,
+  fileSize: file.size,
+  fileType: file.type || 'application/octet-stream',
+  totalChunks: chunkParts.flat().length,
+  chunkParts // ✅ now available for resend
+});
 
   const metadata = {
     type: 'file',
@@ -1124,10 +1273,14 @@ function processNextFileInQueue() {
     const fileUrl = URL.createObjectURL(file);
     displayMessage(name, file.name, true, 'file', fileUrl, messageId, 'sent', metadata.fileType,metadata.fileSize);
     showProgressBar(messageId, true);
-    sendFileChunks(messageId, () => {
-      isSendingFile = false;
-      processNextFileInQueue();
-    });
+    // Delay to ensure metadata is processed before data chunks arrive
+    setTimeout(() => {
+      sendFileChunks(messageId, () => {
+        isSendingFile = false;
+        processNextFileInQueue();
+      });
+    }, 100); // 100ms delay is usually enough
+
   } catch (error) {
     console.error('Error sending file:', error);
     hideProgressBar(messageId);
