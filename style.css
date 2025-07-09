@@ -108,6 +108,11 @@
   display: block;
 }
 
+#map {
+  width: 100%;
+  height: 300px;
+}
+
 @keyframes slideUp {
   from {
     transform: translateY(100%);

@@ -614,6 +614,10 @@ function setupDataChannel() {
         displayMessage(msg.name, msg.message, false, 'text', null, msg.messageId, 'delivered');
       }
 
+      else if (msg.type === 'location') {
+        displayMessage(msg.name || 'Peer', msg, false, 'location', null, msg.messageId, 'delivered');
+      }
+
      else if (msg.type === 'file') {
         receivedTransfers.set(msg.messageId, {
           fileInfo: {
@@ -1012,7 +1016,21 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
   const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
   let messageContent = content;
-  if (type === 'file' && file) {
+  if (type === 'location') {
+    const obj = typeof content === 'string' ? JSON.parse(content) : content;
+    const shortUrl = obj.url;
+    messageContent = `
+      <div class="card shadow-sm border-0">
+        <div class="ratio ratio-16x9">
+          <iframe class="rounded" src="https://maps.google.com/maps?q=${obj.lat},${obj.lng}&z=15&output=embed" frameborder="0"></iframe>
+        </div>
+        <div class="p-2">
+          <div class="fw-bold mb-1 text-truncate">${shortUrl}</div>
+          <a href="${shortUrl}" target="_blank" class="btn btn-sm btn-outline-primary w-100"><i class="fas fa-map-pin me-1"></i> Go to</a>
+        </div>
+      </div>`;
+  }
+  else if (type === 'file' && file) {
     const isImage = fileType && fileType.startsWith('image/');
     const isAudio = fileType && fileType.startsWith('audio/');
     const isVideo = fileType && fileType.startsWith('video/');

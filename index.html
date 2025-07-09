@@ -35,6 +35,11 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css" />
   <!-- Custom CSS -->
   <link rel="stylesheet" href="style.css">
+
+  <!-- Leaflet.js (for map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 </head>
 
 <body>
@@ -247,6 +252,31 @@
         <button type="button" class="btn btn-secondary me-2" id="switchCameraBtn">
           <i class="fas fa-sync-alt"></i> Switch Camera
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Location Sharing Modal -->
+<div id="locationModal" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header custom-bg text-white">
+        <h5 class="modal-title"><i class="fas fa-location-dot me-2"></i> Share Location</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-2">
+        <div class="input-group mb-2">
+          <input type="text" id="location-search" class="form-control" placeholder="Search a location...">
+          <button class="btn btn-outline-secondary" type="button" id="btnSearchLocation">
+            <i class="fas fa-search"></i>
+          </button>
+        </div>
+        <div id="map" style="height: 300px; border-radius: 10px;"></div>
+        <div class="d-flex justify-content-end mt-3 gap-2">
+          <button class="btn btn-outline-secondary" id="btnCurrentLocation"><i class="fas fa-crosshairs"></i> Current</button>
+          <button class="btn btn-primary" id="btnSendLocation"><i class="fas fa-paper-plane"></i> Send</button>
+        </div>
       </div>
     </div>
   </div>

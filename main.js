@@ -76,7 +76,7 @@
             break;
 
           case 'location':
-            shareLocation();
+            initMapModal();
             break;
 
           case 'link':
@@ -261,39 +261,10 @@
       startVideoRecording(); // Restart with new camera
     });
 
-
-    function shareLocation() {
-      if (!navigator.geolocation) {
-        alert('Geolocation not supported');
-        return;
-      }
-
-      navigator.permissions.query({ name: 'geolocation' }).then(result => {
-        if (result.state === 'denied') {
-          alert('Location access denied. Please allow it in browser settings.');
-          return;
-        }
-
-        navigator.geolocation.getCurrentPosition(pos => {
-          const { latitude, longitude } = pos.coords;
-          const mapsUrl = `https://www.google.com/maps?q=${latitude},${longitude}`;
-          sendLocationMessage(mapsUrl); 
-        }, err => {
-          alert('Failed to get location');
-        });
-      });
-    }
-
-
     function sendLinkMessage(url) {
       // Send as simple text or with a preview
       var url_ = `<a href="${url}" target="_blank">${truncateName(url,20)}</a>`;
       sendTextMessage(url);
-    }
-
-    function sendLocationMessage(link) {
-      // Use your sendTextMessage function or show map preview
-      sendTextMessage(`📍 <a href="${link}" target="_blank">${truncateName(link,20)}</a>`);
     }
 
     function attachBlobToFileInput(blob, filename) {
@@ -315,5 +286,87 @@
       $('#chat-message').val(msg);
     }
 
-  });
+
+    let selectedLatLng = null;
+    let map, marker;
+
+    function initMapModal() {
+      $('#locationModal').modal('show');
+      setTimeout(() => {
+        if (!map) {
+          map = L.map('map').setView([20.5937, 78.9629], 5); // India default
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+          marker = L.marker([20.5937, 78.9629], { draggable: true }).addTo(map);
+
+          map.on('click', function (e) {
+            selectedLatLng = e.latlng;
+            marker.setLatLng(selectedLatLng);
+          });
+        } else {
+          map.invalidateSize();
+        }
+      }, 300);
+    }
+
+    function geocodeLocation(query) {
+        if (!query) return;
+
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+
+        fetch(url)
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.length > 0) {
+              const result = data[0];
+              const latlng = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
+              selectedLatLng = latlng;
+              marker.setLatLng(latlng);
+              map.setView(latlng, 14);
+            } else {
+              alert('No location found.');
+            }
+          })
+          .catch(() => alert('Location search failed.'));
+    }
+
+
+    $('#btnCurrentLocation').click(() => {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        selectedLatLng = { lat: latitude, lng: longitude };
+        marker.setLatLng(selectedLatLng);
+        map.setView(selectedLatLng, 15);
+      }, () => alert('Unable to get current location'));
+    });
+
+    $('#btnSearchLocation').click(() => {
+      const query = $('#location-search').val().trim();
+      geocodeLocation(query);
+    });
+
+    $('#btnSendLocation').click(() => {
+      if (!selectedLatLng) {
+        alert('Select a location first.');
+        return;
+      }
+
+      const { lat, lng } = selectedLatLng;
+      const gmapUrl = `https://maps.google.com/?q=${lat},${lng}`;
+      const message = JSON.stringify({
+        type: 'location',
+        lat,
+        lng,
+        url: gmapUrl,
+        name: truncateName(gmapUrl, 25),
+        messageId: Date.now()
+      });
+
+      if (dataChannel && dataChannel.readyState === 'open') {
+        dataChannel.send(message);
+        displayMessage('Me', message, true, 'location', null, message.messageId, 'sent');
+      }
+      $('#locationModal').modal('hide');
+    });
+
+});
   
