@@ -368,5 +368,74 @@
       $('#locationModal').modal('hide');
     });
 
+    $('#saveGeminiKeyBtn').click(() => {
+      const key = $('#geminiApiKey').val().trim();
+      if (!key) return alert("Please enter an API key");
+      localStorage.setItem("gemini_api_key", key);
+      $('#settingAi').modal('hide');
+      showAlert("Gemini API key saved successfully", false);
+    });
+
+   $('#ai-btn').click(() => {
+      if (typeof window.autoCheckInterval !== 'undefined') {
+        clearInterval(window.autoCheckInterval);
+      }
+      $('#ai-btn').addClass('d-none');
+      $('#login-section').addClass('d-none');
+      $('#reloadBtn').addClass('d-none');
+      $('#chat-section').removeClass('d-none');
+      $('#headerBtnName').html('<i class="fas fa-robot"></i> Jarvis');
+      $('#btn-toggle').addClass('d-none');
+      $('#chat-message').val('');
+      $('#settingBtn').attr('data-bs-target', '#settingAi');
+      $('#delete-all-btn').wrap('<div class="d-flex align-items-center"></div>');
+      $('<button id="backBtn" class="btn btn-link text-white fs-6 p-0 text-decoration-none fw-bold border-0 me-2"><i class="fas fa-arrow-left"></i></button>')
+        .insertBefore('#delete-all-btn')
+        .click(() => {
+          location.reload();
+        });
+      $('#delete-all-btn').removeAttr('id');
+      $('#btn-send-text').off('click').on('click', async () => {
+        const msg = $('#chat-message').val().trim();
+        if (!msg) return;
+
+        displayMessage("You", msg, true, 'text', null, Date.now().toString(), 'sent');
+        $('#chat-message').val('');
+
+        const reply = await getGeminiReply(msg);
+        displayMessage("Jarvis", reply, false, 'text', null, Date.now().toString(), 'delivered');
+      });
+
+      // Open AI Settings if no API key
+      const apiKey = localStorage.getItem("gemini_api_key");
+      if (!apiKey) {
+        const aiModal = new bootstrap.Modal(document.getElementById('settingAi'));
+        aiModal.show();
+      }
+    });
+
+    async function getGeminiReply(userMessage) {
+      const apiKey = localStorage.getItem("gemini_api_key");
+      if (!apiKey) return "Please set the API key in settings";
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `Reply like a friendly human:\n${userMessage}` }] }]
+          })
+        });
+
+        const data = await response.json();
+        return data?.candidates?.[0]?.content?.parts?.[0]?.text || "🤖 Sorry, I don't understand.";
+      } catch (e) {
+        console.error("Gemini error:", e);
+        return "🤖 Error connecting to Gemini.";
+      }
+    }
 });
-  
+function loadApiKey() {
+  const apiKey = localStorage.getItem("gemini_api_key") || "";
+  $('#geminiApiKey').val(apiKey);
+}

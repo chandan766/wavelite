@@ -232,6 +232,7 @@ $(document).ready(() => {
         $('#peerNameToSave').val(savedPeersName);
       }
       loadStunSettings();
+      loadApiKey();
   });
 
   // Save when any box is clicked (enforce minimum 2)
@@ -253,7 +254,7 @@ $(document).on('change', '.stun-option', () => {
 });
 
   let hasPrompted = false;
-  let autoCheckInterval = setInterval(async () => {
+  window.autoCheckInterval = setInterval(async () => {
   if (isManuallyConnecting || hasPrompted) return;
   const savedPeers = localStorage.getItem("peerIds") || "peer123";
   const savedPeerName = localStorage.getItem("peerName") || "Anonymous";
