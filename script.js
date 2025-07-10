@@ -1003,6 +1003,7 @@ function showQueuedProgress(fakeId, fileName) {
 
 
 function transitionToChat() {
+  $('#ai-btn').addClass('d-none');
   if ($('#chat-section').hasClass('d-none')) {
     $('#login-section').removeClass('d-flex').addClass('d-none');
     $('#chat-section').removeClass('d-none');
