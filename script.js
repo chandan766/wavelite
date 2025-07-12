@@ -7,16 +7,18 @@ let localConnection, dataChannel;
 let pollingInterval;
 let isManuallyConnecting = false;
 let peerId = null; // Global peerId variable
+let mediaSendQueue = [];
+let isSendingFile = false;
+let pingIntervalId = null;
+let mediaChannels = [];
+let mediaReceivingChunks = {};
+let lastPingReceivedTime = Date.now();
 const CONNECTION_TIMEOUT = 120000; // 120 seconds timeout for connection
 const CHUNK_TIMEOUT = 5000; // 10 seconds for chunk timeout
 const MAX_RETRIES = 5; // Maximum retries for missing chunks
-let mediaSendQueue = [];
-let isSendingFile = false;
 const NUM_MEDIA_CHANNELS = 3;
-let mediaChannels = [];
-let mediaReceivingChunks = {};
-let pingIntervalId = null;
-const PING_INTERVAL = 10000
+const PING_INTERVAL = 10000;
+
 
 // File sending configuration
 // const CHUNK_SIZE = 16384; // 16KB chunks for WebRTC data channel
@@ -531,12 +533,13 @@ function setupDataChannel() {
   dataChannel.onopen = () => {
     console.log("Data channel opened for peerId:", peerId);
     deletePeerFromSheet(peerId);
-     // Start periodic ping
+    // Start periodic ping to peer
     pingIntervalId = setInterval(() => {
       if (dataChannel.readyState === 'open') {
         dataChannel.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
       }
     }, PING_INTERVAL);
+   
     dataChannel.send(JSON.stringify({
       type: 'username',
       name: truncateName($('#chat-username').val() || "Anonymous")
@@ -548,8 +551,18 @@ function setupDataChannel() {
     if (e.data instanceof ArrayBuffer) {
       const view = new Uint32Array(e.data, 0, 3);
       const [majorIndex, chunkIndex, totalChunks] = view;
-      const messageId = Array.from(receivedTransfers.keys())[0]; // Simplified assumption: one transfer at a time
-
+    // ✅ Safely identify single-channel transfer
+      let messageId = null;
+      for (const [id, transfer] of receivedTransfers.entries()) {
+        if (transfer.fileInfo.useSingleChannel) {
+          messageId = id;
+          break;
+        }
+      }
+      if (!messageId) {
+        console.warn("No active single-channel transfer found for incoming chunk.");
+        return;
+      } 
       const transfer = receivedTransfers.get(messageId);
       if (!transfer) {
         console.warn("Received chunk but no file info available yet.");
@@ -626,7 +639,8 @@ function setupDataChannel() {
             messageId: msg.messageId,
             fileName: msg.fileName,
             fileSize: msg.fileSize,
-            fileType: msg.fileType
+            fileType: msg.fileType,
+            useSingleChannel: msg.useSingleChannel || false
           },
           buffers: [],
           receivedBytes: 0,
@@ -635,19 +649,20 @@ function setupDataChannel() {
           timeoutId: null
         });
 
-        // ✅ This is the missing part for media chunks
-        mediaReceivingChunks[msg.messageId] = {
-          fileInfo: {
-            name: msg.name,
-            fileName: msg.fileName,
-            fileSize: msg.fileSize,
-            fileType: msg.fileType
-          },
-          parts: new Array(NUM_MEDIA_CHANNELS), // Pre-allocate for chunk tracking
-          bytesReceived: 0,
-          expectedSize: msg.fileSize, 
-          completed: false
-        };
+        if (!msg.useSingleChannel) {
+          mediaReceivingChunks[msg.messageId] = {
+            fileInfo: {
+              name: msg.name,
+              fileName: msg.fileName,
+              fileSize: msg.fileSize,
+              fileType: msg.fileType
+            },
+            parts: new Array(NUM_MEDIA_CHANNELS), // Pre-allocate for chunk tracking
+            bytesReceived: 0,
+            expectedSize: msg.fileSize, 
+            completed: false
+          };
+        }
 
         showProgressBar(msg.messageId, false);
         console.log(`Received file metadata for ${msg.fileName}`);
@@ -666,6 +681,7 @@ function setupDataChannel() {
       else if (msg.type === 'ping') {
         console.log(`📡 Ping received from peer at ${new Date(msg.timestamp).toLocaleTimeString()}`);
         $('#status').text('Online');
+        lastPingReceivedTime = Date.now();
       }
     }
   };
@@ -691,13 +707,12 @@ function setupMediaDataChannel(channel, index) {
     const totalChunks = metadata[2];
     const payload = data.slice(12);
 
-    // Find the first active transfer that matches this chunk (assuming one transfer at a time)
+    // 🚫 Ignore if not meant for multi-channel (i.e., single-channel file or uninitialized)
     const activeTransferEntry = Object.entries(mediaReceivingChunks).find(
       ([_, transfer]) => !transfer.completed && transfer.parts.length === 3
     );
-
     if (!activeTransferEntry) {
-      console.warn("Received chunk but no file info available yet. Queuing it.");
+      console.warn("Received chunk but no file info available yet or this is a single-channel transfer.");
       return;
     }
 
@@ -779,7 +794,9 @@ function setupMediaDataChannel(channel, index) {
 
   channel.onerror = (err) => {
     console.error("Media channel error (index " + index + "):", err);
-    showAlert("Error on media channel " + index);
+    // showAlert("Error on media channel " + index);
+    $('#status').text('Offline');
+    showPeerOfflineModal();
   };
 
   channel.onopen = () => {
@@ -792,12 +809,89 @@ function sendFileChunks(messageId, onComplete = () => {}) {
   const transfer = activeTransfers.get(messageId);
   if (!transfer) return;
 
+  // ✅ If file is < 1MB, use a single data channel
+  if (transfer.useSingleChannel) {
+    const channel = dataChannel;
+    if (!channel) {
+      console.warn("No open media channel available.");
+      showAlert("No media channel available to send the file.");
+      return;
+    }
+
+    const totalChunks = Math.ceil(transfer.file.size / CHUNK_SIZE);
+    let sentChunks = 0;
+    let progressUpdated = 0;
+    let currentChunk = 0;
+
+    const sendChunk = () => {
+      if (currentChunk >= totalChunks) {
+        console.log('✅ File sending complete (single channel) for messageId:', messageId);
+        hideProgressBar(messageId);
+        $('#chat-file').val('');
+        $('#btn-toggle-back').click();
+        currentFile = null;
+        activeTransfers.delete(messageId);
+        retryCounts.delete(messageId);
+        onComplete();
+        return;
+      }
+
+      if (channel.bufferedAmount > 4 * 1024 * 1024) {
+        setTimeout(sendChunk, 100);
+        return;
+      }
+
+      const start = currentChunk * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, transfer.file.size);
+      const slice = transfer.file.slice(start, end);
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        try {
+          const meta = new Uint32Array([0, currentChunk, totalChunks]);
+          const data = new Uint8Array(reader.result);
+          const combined = new Uint8Array(meta.byteLength + data.byteLength);
+          combined.set(new Uint8Array(meta.buffer), 0);
+          combined.set(data, meta.byteLength);
+          channel.send(combined.buffer);
+
+          sentChunks++;
+          const percentage = (sentChunks / totalChunks) * 100;
+          if (percentage - progressUpdated >= 1) {
+            progressUpdated = percentage;
+            updateProgressBar(messageId, percentage);
+          }
+
+          currentChunk++;
+          setTimeout(sendChunk, 0);
+        } catch (err) {
+          console.error('❌ Error sending chunk:', err);
+          hideProgressBar(messageId);
+          showAlert('Failed to send chunk.');
+          onComplete();
+        }
+      };
+
+      reader.onerror = () => {
+        console.error('❌ FileReader error during send');
+        hideProgressBar(messageId);
+        showAlert('Failed to read file chunk.');
+        onComplete();
+      };
+
+      reader.readAsArrayBuffer(slice);
+    };
+
+    sendChunk();
+    return; // ✅ Exit here if using single channel
+  }
+
+  // 🔁 Multi-channel logic for files >= 1MB
   const file = transfer.file;
   const fileSize = file.size;
   const chunkSize = CHUNK_SIZE;
   const numChannels = mediaChannels.length;
 
-  // 1. Split file into 3 major parts
   const partSize = Math.ceil(fileSize / numChannels);
   const chunkParts = [];
 
@@ -812,12 +906,11 @@ function sendFileChunks(messageId, onComplete = () => {}) {
     }
   }
 
-  // 2. State tracking
+  transfer.chunkParts = chunkParts; 
   const totalSubChunks = chunkParts.flat().length;
   let totalSentChunks = 0;
   let progressUpdated = 0;
 
-  // 3. Start sending for each channel in parallel
   chunkParts.forEach((partChunks, majorIndex) => {
     let subIndex = 0;
 
@@ -831,8 +924,7 @@ function sendFileChunks(messageId, onComplete = () => {}) {
         return;
       }
 
-      if (channel.bufferedAmount > 4 * 1024 * 1024) { // 4MB threshold
-        // Too much pending in the buffer, wait
+      if (channel.bufferedAmount > 4 * 1024 * 1024) {
         setTimeout(sendNext, 100);
         return;
       }
@@ -859,7 +951,7 @@ function sendFileChunks(messageId, onComplete = () => {}) {
           }
 
           subIndex++;
-          setTimeout(sendNext, 0); // Non-blocking
+          setTimeout(sendNext, 0);
         } catch (err) {
           console.error('❌ Send error:', err);
           hideProgressBar(messageId);
@@ -878,10 +970,9 @@ function sendFileChunks(messageId, onComplete = () => {}) {
       reader.readAsArrayBuffer(partChunks[subIndex]);
     };
 
-    sendNext(); // Begin sending on this channel
+    sendNext();
   });
 
-  // 4. Completion monitor (poll for completion)
   const checkComplete = setInterval(() => {
     if (totalSentChunks >= totalSubChunks) {
       clearInterval(checkComplete);
@@ -1265,6 +1356,7 @@ function processNextFileInQueue() {
   }
   const name = $('#chat-username').val() || 'Anonymous';
   const messageId = Date.now().toString();
+  const useSingleChannel = file.size < 1024 * 1024; // Less than 1MB
   currentChunk = 0;
   totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
@@ -1289,7 +1381,8 @@ activeTransfers.set(messageId, {
   fileSize: file.size,
   fileType: file.type || 'application/octet-stream',
   totalChunks: chunkParts.flat().length,
-  chunkParts // ✅ now available for resend
+  chunkParts, 
+  useSingleChannel
 });
 
   const metadata = {
@@ -1298,7 +1391,8 @@ activeTransfers.set(messageId, {
     messageId,
     fileName: file.name,
     fileSize: file.size,
-    fileType: file.type || 'application/octet-stream'
+    fileType: file.type || 'application/octet-stream',
+    useSingleChannel
   };
 
   try {
@@ -1370,6 +1464,32 @@ function handleIncomingChunk(arrayBuffer, messageId, channelLabel) {
     delete mediaReceivingChunks[messageId];
   }
 }
+
+function showPeerOfflineModal() {
+  if ($('#peerOfflineModal').length > 0) return; // Prevent duplicates
+
+  const modalHtml = `
+    <div class="modal fade" id="peerOfflineModal" tabindex="-1" aria-labelledby="peerOfflineModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-center">
+          <div class="modal-header">
+            <h5 class="modal-title w-100" id="peerOfflineModalLabel">Connection Lost</h5>
+          </div>
+          <div class="modal-body">
+            <p>Your peer seems to be offline or has closed the chat.</p>
+          </div>
+          <div class="modal-footer justify-content-center">
+            <button type="button" class="btn btn-primary" onclick="location.reload()">Reload</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  $('body').append(modalHtml);
+  const modal = new bootstrap.Modal(document.getElementById('peerOfflineModal'));
+  modal.show();
+}
+
 
 function formatBytes(sizeInBytes) {
   const units = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
