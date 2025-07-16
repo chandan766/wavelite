@@ -43,22 +43,56 @@
 </head>
 
 <body>
-  <header class="header custom-bg py-3 text-white d-flex justify-content-between align-items-center px-3">
-    <!-- Left Section -->
-    <button id="delete-all-btn" class="btn btn-link text-white fs-6 p-0 text-decoration-none fw-bold border-0 text-start">
-      <span id="headerBtnName"><i class="fa-solid fa-message"></i> Wave Lite</span>
-      <div id="status" class="text-white small" style="font-size: 0.7rem;"></div>
-    </button>
+ <header class="header custom-bg py-3 text-white d-flex justify-content-between align-items-center px-3">
+  <!-- Left Section -->
+  <button id="delete-all-btn" class="btn btn-link text-white fs-6 p-0 text-decoration-none fw-bold border-0 text-start">
+    <span id="headerBtnName"><i class="fa-solid fa-message"></i> Wave Lite</span>
+    <div id="status" class="text-white small" style="font-size: 0.7rem;"></div>
+  </button>
 
-    <!-- Right Buttons -->
-    <button class="btn btn-link text-white fs-5 p-0" id="reloadBtn" title="Refresh">
-      <i class="fas fa-rotate"></i>
-    </button>
-
+  <!-- Right Section: Settings + Dropdown -->
+  <div class="d-flex align-items-center gap-3">
+    <!-- Settings Button -->
     <button class="btn btn-link text-white fs-5 p-0" id="settingBtn" data-bs-toggle="modal" data-bs-target="#savePeerModal" title="Watch a Peer ID">
       <i class="fas fa-cog"></i>
     </button>
-  </header>
+
+    <!-- Dropdown Menu -->
+    <div class="dropdown">
+      <button class="btn btn-link text-white fs-5 p-0" id="infoDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-ellipsis-v"></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li>
+          <a class="dropdown-item" href="#" id="reloadBtn">
+            <i class="fas fa-rotate me-2"></i>Refresh
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="usermanual.html">
+            <i class="fas fa-book me-2"></i>User Manual
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="feedback.html">
+            <i class="fas fa-comment-dots me-2"></i>Feedback
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="faq.html">
+            <i class="fas fa-question-circle me-2"></i>FAQ
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="about.html">
+            <i class="fas fa-info-circle me-2"></i>About
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</header>
+
 
   <!-- Peer ID Login Card -->
   <main class="container d-flex justify-content-center align-items-center vh-100" id="login-section">
@@ -321,6 +355,8 @@
     </div>
   </div>
 </div>
+
+
 
 <button id="ai-btn" class="btn btn-primary rounded-circle position-fixed" style="bottom: 60px; right: 25px; z-index: 1050;">
   <i class="fas fa-robot"></i>
