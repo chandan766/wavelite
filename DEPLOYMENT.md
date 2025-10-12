@@ -13,8 +13,9 @@ This guide explains how to deploy the WaveLite Chat application to Cloudflare Pa
 ### 1. Prepare Your Repository
 
 1. Upload all project files to your Git repository
-2. Ensure the `functions/` directory contains `signaling.js`
+2. Ensure the `functions/` directory contains `signaling.js` (the main signaling function)
 3. Make sure all Google Forms references have been removed
+4. Verify the function structure is correct for Cloudflare Pages
 
 ### 2. Deploy to Cloudflare Pages
 

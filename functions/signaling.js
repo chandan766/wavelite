@@ -36,6 +36,8 @@ export async function onRequest(context) {
   const path = url.pathname;
   const method = request.method;
 
+  console.log(`Signaling function called: ${method} ${path}`);
+
   // Handle CORS preflight requests
   if (method === 'OPTIONS') {
     return new Response(null, {
@@ -50,19 +52,23 @@ export async function onRequest(context) {
 
     // Route based on path
     if (path === '/signaling/offer' && method === 'POST') {
-      return handleOffer(request);
-    } else if (path === '/signaling/answer' && method === 'POST') {
-      return handleAnswer(request);
-    } else if (path === '/signaling/candidate' && method === 'POST') {
-      return handleCandidate(request);
+      return handleOfferSubmission(request);
     } else if (path === '/signaling/offer' && method === 'GET') {
-      return handleGetOffer(request);
+      return handleOfferRetrieval(request);
+    } else if (path === '/signaling/answer' && method === 'POST') {
+      return handleAnswerSubmission(request);
     } else if (path === '/signaling/answer' && method === 'GET') {
-      return handleGetAnswer(request);
+      return handleAnswerRetrieval(request);
+    } else if (path === '/signaling/candidate' && method === 'POST') {
+      return handleCandidateSubmission(request);
     } else if (path === '/signaling/cleanup' && method === 'POST') {
       return handleCleanup(request);
     } else {
-      return new Response(JSON.stringify({ error: 'Not found' }), {
+      return new Response(JSON.stringify({ 
+        error: 'Not found',
+        path: path,
+        method: method
+      }), {
         status: 404,
         headers: corsHeaders
       });
@@ -80,10 +86,12 @@ export async function onRequest(context) {
 }
 
 // Handle offer submission
-async function handleOffer(request) {
+async function handleOfferSubmission(request) {
   try {
     const body = await request.json();
     const { peerId, sdp } = body;
+
+    console.log(`Offer submission: peerId=${peerId}, sdp length=${sdp ? sdp.length : 0}`);
 
     if (!peerId || !sdp) {
       return new Response(JSON.stringify({ 
@@ -112,7 +120,7 @@ async function handleOffer(request) {
       headers: corsHeaders
     });
   } catch (error) {
-    console.error('Error handling offer:', error);
+    console.error('Error handling offer submission:', error);
     return new Response(JSON.stringify({ 
       error: 'Failed to process offer',
       message: error.message 
@@ -124,10 +132,12 @@ async function handleOffer(request) {
 }
 
 // Handle answer submission
-async function handleAnswer(request) {
+async function handleAnswerSubmission(request) {
   try {
     const body = await request.json();
     const { peerId, sdp } = body;
+
+    console.log(`Answer submission: peerId=${peerId}, sdp length=${sdp ? sdp.length : 0}`);
 
     if (!peerId || !sdp) {
       return new Response(JSON.stringify({ 
@@ -156,7 +166,7 @@ async function handleAnswer(request) {
       headers: corsHeaders
     });
   } catch (error) {
-    console.error('Error handling answer:', error);
+    console.error('Error handling answer submission:', error);
     return new Response(JSON.stringify({ 
       error: 'Failed to process answer',
       message: error.message 
@@ -168,7 +178,7 @@ async function handleAnswer(request) {
 }
 
 // Handle ICE candidate submission
-async function handleCandidate(request) {
+async function handleCandidateSubmission(request) {
   try {
     const body = await request.json();
     const { peerId, candidate } = body;
@@ -209,7 +219,7 @@ async function handleCandidate(request) {
       headers: corsHeaders
     });
   } catch (error) {
-    console.error('Error handling candidate:', error);
+    console.error('Error handling candidate submission:', error);
     return new Response(JSON.stringify({ 
       error: 'Failed to process candidate',
       message: error.message 
@@ -221,10 +231,12 @@ async function handleCandidate(request) {
 }
 
 // Handle offer retrieval
-async function handleGetOffer(request) {
+async function handleOfferRetrieval(request) {
   try {
     const url = new URL(request.url);
     const peerId = url.searchParams.get('peerId');
+
+    console.log(`Offer retrieval request: peerId=${peerId}`);
 
     if (!peerId) {
       return new Response(JSON.stringify({ 
@@ -239,6 +251,7 @@ async function handleGetOffer(request) {
     const offerData = signalingData.get(key);
 
     if (!offerData) {
+      console.log(`No offer found for peerId: ${peerId}`);
       return new Response(JSON.stringify({ 
         found: false,
         message: 'No offer found for this peerId' 
@@ -248,6 +261,7 @@ async function handleGetOffer(request) {
       });
     }
 
+    console.log(`Found offer for peerId: ${peerId}`);
     return new Response(JSON.stringify({ 
       found: true,
       peerId: offerData.peerId,
@@ -270,10 +284,12 @@ async function handleGetOffer(request) {
 }
 
 // Handle answer retrieval
-async function handleGetAnswer(request) {
+async function handleAnswerRetrieval(request) {
   try {
     const url = new URL(request.url);
     const peerId = url.searchParams.get('peerId');
+
+    console.log(`Answer retrieval request: peerId=${peerId}`);
 
     if (!peerId) {
       return new Response(JSON.stringify({ 
@@ -288,6 +304,7 @@ async function handleGetAnswer(request) {
     const answerData = signalingData.get(key);
 
     if (!answerData) {
+      console.log(`No answer found for peerId: ${peerId}`);
       return new Response(JSON.stringify({ 
         found: false,
         message: 'No answer found for this peerId' 
@@ -297,6 +314,7 @@ async function handleGetAnswer(request) {
       });
     }
 
+    console.log(`Found answer for peerId: ${peerId}`);
     return new Response(JSON.stringify({ 
       found: true,
       peerId: answerData.peerId,
@@ -323,6 +341,8 @@ async function handleCleanup(request) {
   try {
     const body = await request.json();
     const { peerId } = body;
+
+    console.log(`Cleanup request: peerId=${peerId}`);
 
     if (!peerId) {
       return new Response(JSON.stringify({ 

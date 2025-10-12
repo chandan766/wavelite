@@ -35,6 +35,7 @@ Successfully migrated the WaveLite Chat project from Google Forms to Cloudflare 
 - **Automatic cleanup** - Data expires after 5 minutes
 - **CORS support** - Proper cross-origin headers
 - **Error handling** - Comprehensive error responses
+- **Single function architecture** - All endpoints handled in one function for better reliability
 
 ### 3. Updated Frontend JavaScript
 
@@ -179,6 +180,37 @@ Successfully migrated the WaveLite Chat project from Google Forms to Cloudflare 
 4. **Consider optimizations** like KV storage for high-traffic scenarios
 5. **Update documentation** as needed
 
+## Troubleshooting
+
+### Common Issues and Solutions
+
+**1. 405 Method Not Allowed Error**
+- **Cause**: Cloudflare Pages Function not properly handling the request method
+- **Solution**: Ensure the function is deployed correctly and handles both GET and POST methods
+- **Fix Applied**: Restructured the function to use a single file with proper routing
+
+**2. CORS Errors**
+- **Cause**: Missing or incorrect CORS headers
+- **Solution**: Verify the function includes proper CORS headers for all methods
+- **Fix Applied**: Added comprehensive CORS headers including OPTIONS handling
+
+**3. Function Not Found (404)**
+- **Cause**: Incorrect function file structure or deployment issues
+- **Solution**: Ensure `functions/signaling.js` exists and is properly deployed
+- **Fix Applied**: Simplified to single function architecture
+
+**4. Data Not Persisting**
+- **Cause**: Each function invocation has separate memory space
+- **Solution**: Use KV storage or Durable Objects for production
+- **Current**: In-memory storage with automatic cleanup (suitable for development)
+
+### Testing the Fix
+
+1. **Deploy the updated function** to Cloudflare Pages
+2. **Test the signaling endpoints** using the test page
+3. **Verify WebRTC connections** work properly
+4. **Check browser console** for any remaining errors
+
 ## Support
 
 For issues with the migration:
@@ -187,5 +219,6 @@ For issues with the migration:
 3. Verify all files are properly deployed
 4. Check browser console for errors
 5. Review the test page results
+6. Check the troubleshooting section above
 
 The migration maintains full backward compatibility with existing WebRTC functionality while providing a more robust and performant signaling system.
