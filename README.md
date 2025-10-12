@@ -11,61 +11,47 @@ Wave Lite is a lightweight, peer-to-peer chat application built using WebRTC for
 - **Media Rendering**: Displays images inline, provides controls for audio/video, and includes download links for all files.
 - **Responsive UI**: WhatsApp-like chat interface with sender/receiver message alignment and timestamps.
 - **Error Handling**: Robust handling for connection timeouts, file transfer failures, and missing chunks with retry mechanisms.
-- **No Server Storage**: Uses Cloudflare Worker for temporary SDP exchange during connection setup, with automatic cleanup.
+- **No Server Storage**: Uses Cloudflare Pages Functions for temporary SDP exchange during connection setup, with automatic cleanup.
 
 ## Prerequisites
 - A modern web browser (e.g., Chrome, Firefox, Edge) with WebRTC support.
-- Internet access for initial connection setup via Cloudflare Worker.
+- Internet access for initial connection setup via Cloudflare Pages Functions.
 - Basic knowledge of HTML, CSS, and JavaScript for local hosting.
-- Cloudflare account for deploying the signaling worker (optional for local development).
 
 ## Project Structure
 ```
 wave-lite/
-├── index.html      # Main HTML file for the application
-├── script.js       # JavaScript logic for WebRTC, messaging, and file transfers
-├── main.js         # UI interactions and event handlers
-├── style.css       # CSS for styling the UI
-├── assets/         # Images and other static assets
-├── about.html      # About page
-├── faq.html        # FAQ page
-├── feedback.html   # Feedback form
-├── usermanual.html # User manual
-├── workers/        # Cloudflare Worker for signaling
-│   ├── signaling.js # Signaling worker implementation
-│   └── wrangler.toml # Worker configuration
-└── README.md       # Project documentation
+├── index.html          # Main HTML file for the application
+├── script.js           # JavaScript logic for WebRTC, messaging, and file transfers
+├── main.js             # Additional JavaScript functionality
+├── style.css           # CSS for styling the UI
+├── functions/
+│   └── signaling.js    # Cloudflare Pages Function for WebRTC signaling
+├── test-signaling.html # Test page for signaling function
+├── DEPLOYMENT.md       # Deployment guide for Cloudflare Pages
+├── about.html          # About page
+├── feedback.html       # Feedback form
+├── faq.html           # FAQ page
+├── usermanual.html    # User manual
+└── README.md          # Project documentation
 ```
 
-## Cloudflare Worker Setup
+## New Signaling System
 
-The signaling system now uses a Cloudflare Worker instead of Google Forms. To deploy the worker:
+WaveLite now uses **Cloudflare Pages Functions** instead of Google Forms for WebRTC signaling. This provides:
 
-1. **Install Wrangler CLI**:
-   ```bash
-   npm install -g wrangler
-   ```
+- **Better Performance**: Faster signaling with lower latency
+- **Improved Reliability**: More stable connection establishment
+- **Enhanced Security**: Proper CORS handling and data isolation
+- **Automatic Cleanup**: Signaling data expires after 5 minutes
+- **No External Dependencies**: Self-contained signaling system
 
-2. **Login to Cloudflare**:
-   ```bash
-   wrangler login
-   ```
+### Deployment Options
 
-3. **Deploy the Worker**:
-   ```bash
-   cd workers
-   wrangler deploy
-   ```
+1. **Cloudflare Pages (Recommended)**: Deploy to Cloudflare Pages for the best experience
+2. **Local Development**: Use for testing and development (requires separate signaling setup)
 
-4. **Update the Signaling URL**:
-   - After deployment, update the `SIGNALING_URL` in `script.js` with your worker URL
-   - The URL will be something like: `https://wavelite-signaling.your-subdomain.workers.dev`
-
-For local development, you can run the worker locally:
-```bash
-cd workers
-wrangler dev
-```
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
 
 ## How to Use
 1. **Access the Application**:
@@ -90,7 +76,7 @@ wrangler dev
 
 ## Technical Details
 - **WebRTC**: Uses RTCPeerConnection and RTCDataChannel for peer-to-peer communication.
-- **SDP Exchange**: Temporarily stores Session Description Protocol (SDP) data in a Cloudflare Worker, with automatic deletion after connection.
+- **SDP Exchange**: Temporarily stores Session Description Protocol (SDP) data using Cloudflare Pages Functions, with automatic deletion after connection.
 - **File Transfer**:
   - Files are split into 16KB chunks for reliable transfer over WebRTC Data Channels.
   - Includes buffer overflow handling, chunk resend requests, and a 15-second timeout with up to 3 retries for missing chunks.
@@ -98,7 +84,7 @@ wrangler dev
 - **Progress Bar**: Displays file name and percentage during uploads/downloads, styled with Bootstrap's progress bar component.
 
 ## Limitations
-- **CORS Restrictions**: The Cloudflare Worker handles CORS properly, providing better error feedback. Ensure stable internet for SDP exchange.
+- **CORS Restrictions**: The Cloudflare Pages Functions API uses proper CORS headers for cross-origin requests. Ensure stable internet for SDP exchange.
 - **File Size**: Large files may require longer transfer times due to chunking and WebRTC buffer limits.
 - **Browser Compatibility**: Requires WebRTC support; older browsers may not work.
 - **Single Peer Connection**: Currently supports one-to-one chat; multi-peer support is not implemented.

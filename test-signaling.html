@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Signaling Function</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        .result { margin: 10px 0; padding: 10px; background: #f5f5f5; border-radius: 3px; }
+        .error { background: #ffebee; color: #c62828; }
+        .success { background: #e8f5e8; color: #2e7d32; }
+    </style>
+</head>
+<body>
+    <h1>WebRTC Signaling Function Test</h1>
+    
+    <div class="test-section">
+        <h3>Test Offer Submission</h3>
+        <button onclick="testOfferSubmission()">Submit Test Offer</button>
+        <div id="offer-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test Answer Submission</h3>
+        <button onclick="testAnswerSubmission()">Submit Test Answer</button>
+        <div id="answer-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test Offer Retrieval</h3>
+        <button onclick="testOfferRetrieval()">Get Test Offer</button>
+        <div id="offer-get-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test Answer Retrieval</h3>
+        <button onclick="testAnswerRetrieval()">Get Test Answer</button>
+        <div id="answer-get-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test Cleanup</h3>
+        <button onclick="testCleanup()">Cleanup Test Data</button>
+        <div id="cleanup-result" class="result"></div>
+    </div>
+
+    <script>
+        const TEST_PEER_ID = 'test-peer-123';
+        const TEST_OFFER_SDP = JSON.stringify({
+            type: 'offer',
+            sdp: 'v=0\r\no=- 1234567890 1234567890 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:test\r\na=ice-pwd:test\r\na=ice-options:trickle\r\na=fingerprint:sha-256 test\r\na=setup:actpass\r\na=mid:0\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n'
+        });
+        const TEST_ANSWER_SDP = JSON.stringify({
+            type: 'answer',
+            sdp: 'v=0\r\no=- 1234567890 1234567890 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS\r\nm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\na=ice-ufrag:test\r\na=ice-pwd:test\r\na=ice-options:trickle\r\na=fingerprint:sha-256 test\r\na=setup:active\r\na=mid:0\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n'
+        });
+
+        async function testOfferSubmission() {
+            const resultDiv = document.getElementById('offer-result');
+            resultDiv.textContent = 'Submitting offer...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch('/signaling/offer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ peerId: TEST_PEER_ID, sdp: TEST_OFFER_SDP })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.textContent = `Success: ${result.message}`;
+                    resultDiv.className = 'result success';
+                } else {
+                    resultDiv.textContent = `Error: ${result.error}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.textContent = `Network Error: ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        async function testAnswerSubmission() {
+            const resultDiv = document.getElementById('answer-result');
+            resultDiv.textContent = 'Submitting answer...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch('/signaling/answer', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ peerId: TEST_PEER_ID, sdp: TEST_ANSWER_SDP })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.textContent = `Success: ${result.message}`;
+                    resultDiv.className = 'result success';
+                } else {
+                    resultDiv.textContent = `Error: ${result.error}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.textContent = `Network Error: ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        async function testOfferRetrieval() {
+            const resultDiv = document.getElementById('offer-get-result');
+            resultDiv.textContent = 'Retrieving offer...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch(`/signaling/offer?peerId=${encodeURIComponent(TEST_PEER_ID)}`);
+                const result = await response.json();
+                
+                if (response.ok) {
+                    if (result.found) {
+                        resultDiv.textContent = `Found offer: ${result.sdp.substring(0, 100)}...`;
+                        resultDiv.className = 'result success';
+                    } else {
+                        resultDiv.textContent = `No offer found: ${result.message}`;
+                        resultDiv.className = 'result';
+                    }
+                } else {
+                    resultDiv.textContent = `Error: ${result.error}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.textContent = `Network Error: ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        async function testAnswerRetrieval() {
+            const resultDiv = document.getElementById('answer-get-result');
+            resultDiv.textContent = 'Retrieving answer...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch(`/signaling/answer?peerId=${encodeURIComponent(TEST_PEER_ID)}`);
+                const result = await response.json();
+                
+                if (response.ok) {
+                    if (result.found) {
+                        resultDiv.textContent = `Found answer: ${result.sdp.substring(0, 100)}...`;
+                        resultDiv.className = 'result success';
+                    } else {
+                        resultDiv.textContent = `No answer found: ${result.message}`;
+                        resultDiv.className = 'result';
+                    }
+                } else {
+                    resultDiv.textContent = `Error: ${result.error}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.textContent = `Network Error: ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+
+        async function testCleanup() {
+            const resultDiv = document.getElementById('cleanup-result');
+            resultDiv.textContent = 'Cleaning up...';
+            resultDiv.className = 'result';
+            
+            try {
+                const response = await fetch('/signaling/cleanup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ peerId: TEST_PEER_ID })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    resultDiv.textContent = `Success: ${result.message}`;
+                    resultDiv.className = 'result success';
+                } else {
+                    resultDiv.textContent = `Error: ${result.error}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.textContent = `Network Error: ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+        }
+    </script>
+</body>
+</html>

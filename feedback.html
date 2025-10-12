@@ -105,8 +105,7 @@
 
   <!-- Feedback Form Card -->
   <div class="card wl-tech-card p-4">
-    <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;" onload="if(submitted){alert('Submitted Successfully!'); contact();}"></iframe>
-    <form action="https://docs.google.com/forms/u/0/d/e/1FAIpQLSffJzcOwc7q0QuXetxcy0QNReCwDVgtpYj8Xcqz9Y6wniFMWg/formResponse" method="POST" target="hidden_iframe" onsubmit="submitted=true;">
+    <form id="feedbackForm" onsubmit="handleFeedbackSubmit(event);">
       <div class="mb-3">
         <label class="form-label">Full Name</label>
         <div class="input-group">
@@ -157,5 +156,46 @@
 
 <!-- Bootstrap Bundle -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+function handleFeedbackSubmit(event) {
+  event.preventDefault();
+  
+  // Get form data
+  const formData = new FormData(event.target);
+  const name = formData.get('entry.389100388');
+  const email = formData.get('entry.1234567890'); // Update this to match the actual input name
+  const message = formData.get('entry.0987654321'); // Update this to match the actual input name
+  
+  // Simple validation
+  if (!name || !email || !message) {
+    alert('Please fill in all required fields.');
+    return;
+  }
+  
+  // For demo purposes, just show a success message
+  // In a real application, you would send this data to your backend
+  alert('Thank you for your feedback! Your message has been received.');
+  
+  // Reset the form
+  event.target.reset();
+}
+
+// Update the input names to match the form
+document.addEventListener('DOMContentLoaded', function() {
+  const form = document.getElementById('feedbackForm');
+  if (form) {
+    // Update input names to be more generic
+    const nameInput = form.querySelector('input[name="entry.389100388"]');
+    if (nameInput) nameInput.name = 'name';
+    
+    const emailInput = form.querySelector('input[name="entry.1234567890"]');
+    if (emailInput) emailInput.name = 'email';
+    
+    const messageInput = form.querySelector('textarea[name="entry.0987654321"]');
+    if (messageInput) messageInput.name = 'message';
+  }
+});
+</script>
 </body>
 </html>

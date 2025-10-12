@@ -1,6 +1,10 @@
 // --- Config ---
-// Cloudflare Worker URL for signaling
-const SIGNALING_URL = "/workers/signaling";
+// Cloudflare Pages Function endpoints for WebRTC signaling
+const SIGNALING_BASE_URL = '/signaling';
+const OFFER_URL = `${SIGNALING_BASE_URL}/offer`;
+const ANSWER_URL = `${SIGNALING_BASE_URL}/answer`;
+const CANDIDATE_URL = `${SIGNALING_BASE_URL}/candidate`;
+const CLEANUP_URL = `${SIGNALING_BASE_URL}/cleanup`;
 
 let localConnection, dataChannel;
 let pollingInterval;
@@ -148,7 +152,12 @@ $(document).ready(() => {
 
   // Handle delete all button click
   $("#delete-all-btn").click(() => {
-    deleteAllSignalingData()
+    fetch(CLEANUP_URL, {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ peerId: "" }),
+    })
+      .then((res) => res.json())
       .then((result) => {
         showAlert(`Deleted all SDP entries: ${result.message}`, false);
         // Wait 3 seconds before reloading
@@ -517,64 +526,54 @@ function waitForIceGathering(pc) {
 
 async function submitSDP(peerId, role, sdp) {
   updateConnectionStatus("Submitting Offer...", "90", false);
+  
+  const endpoint = role === 'offer' ? OFFER_URL : ANSWER_URL;
+  
   try {
-    const response = await fetch(SIGNALING_URL, {
+    const response = await fetch(endpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        type: role,
-        peerId: peerId,
-        data: sdp,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ peerId, sdp }),
     });
-
+    
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-    }
-
-    const result = await response.json();
-    if (!result.success) {
-      throw new Error(`Signaling error: ${result.error || 'Unknown error'}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
+    const result = await response.json();
     console.log(`Submitted ${role} SDP for peerId: ${peerId}`, result);
     updateConnectionStatus("Offer Submitted", "99", false);
   } catch (error) {
     console.error(`Error submitting ${role} SDP:`, error);
-    showAlert(`Failed to submit ${role}. Please check your connection and try again.`);
     throw error;
   }
 }
 
 async function fetchSDP(peerId, role) {
   try {
-    const response = await fetch(`${SIGNALING_URL}?peerId=${encodeURIComponent(peerId)}&type=${role}`, {
+    const endpoint = role === 'offer' ? OFFER_URL : ANSWER_URL;
+    const url = `${endpoint}?peerId=${encodeURIComponent(peerId)}`;
+    
+    const response = await fetch(url, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { 'Content-Type': 'application/json' },
     });
-
+    
     if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
-
+    
     const result = await response.json();
     
-    if (result.success && result.found) {
+    if (result.found) {
       console.log(`Found ${role} SDP for peerId: ${peerId}`);
-      return { peerId: result.peerId, role: result.type, sdp: result.sdp };
+      return { peerId: result.peerId, role: role, sdp: result.sdp };
     } else {
       console.log(`No ${role} SDP found for peerId: ${peerId}`);
       return null;
     }
   } catch (e) {
     console.error(`Failed to fetch ${role} SDP for peerId: ${peerId}:`, e);
-    // Don't show alert for fetch failures as they're expected during polling
     return null;
   }
 }
@@ -1368,56 +1367,17 @@ function displayMessage(
     showAlert("Failed to display message in UI. Please refresh the page.");
   }
 }
-// Helper function to delete signaling data for a specific peer
-async function deleteSignalingData(peerId) {
-  try {
-    const response = await fetch(`${SIGNALING_URL}?peerId=${encodeURIComponent(peerId)}`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error("Error deleting signaling data:", error);
-    throw error;
-  }
-}
-
-// Helper function to delete all signaling data
-async function deleteAllSignalingData() {
-  try {
-    const response = await fetch(`${SIGNALING_URL}?peerId=`, {
-      method: "DELETE",
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error("Error deleting all signaling data:", error);
-    throw error;
-  }
-}
-
 function deletePeerFromSheet(peerId) {
   if (!peerId) {
     console.error("peerId is undefined in deletePeerFromSheet");
     return;
   }
-  deleteSignalingData(peerId)
+  fetch(CLEANUP_URL, {
+    method: "POST",
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ peerId }),
+  })
+    .then((res) => res.json())
     .then((result) => console.log("Deleted SDP for peerId:", peerId, result))
     .catch((err) => console.error("Delete error for peerId:", peerId, err));
 }
