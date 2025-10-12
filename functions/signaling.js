@@ -9,28 +9,10 @@ const corsHeaders = {
   'Content-Type': 'application/json'
 };
 
-// Generate a unique key for signaling data in KV storage
-function getSignalingKey(type, targetId, senderId, candidateIndex = null, sessionId = null) {
-  const baseKey = `${type}:${targetId}:${senderId}`;
-  
-  if (sessionId) {
-    // Include session ID for offer/answer to prevent overwrites
-    if (type === 'candidate' && candidateIndex !== null) {
-      return `${baseKey}:${sessionId}:${candidateIndex}`;
-    }
-    return `${baseKey}:${sessionId}`;
-  }
-  
-  // Legacy format for backward compatibility
-  if (type === 'candidate' && candidateIndex !== null) {
-    return `${baseKey}:${candidateIndex}`;
-  }
-  return baseKey;
-}
-
-// Generate a key for polling/retrieval
-function getPollingKey(type, targetId) {
-  return `${type}:${targetId}:`;
+// Generate simplified signaling key for KV storage
+function getSignalingKey(type, peerId) {
+  console.log(`🔑 Generating key: ${type}_${peerId}`);
+  return `${type}_${peerId}`;
 }
 
 // Helper function to create consistent error responses
@@ -57,13 +39,12 @@ export async function onRequest(context) {
     const url = new URL(request.url);
     const method = request.method;
 
-    // Enhanced logging for debugging
-    if (method !== 'OPTIONS') {
-      console.log(`Signaling: ${method} ${url.pathname}${url.search}`);
-    }
+    console.log(`🚀 SIGNALING REQUEST: ${method} ${url.pathname}${url.search}`);
+    console.log(`📅 Timestamp: ${new Date().toISOString()}`);
 
     // Handle CORS preflight requests
     if (method === 'OPTIONS') {
+      console.log('✅ CORS preflight request handled');
       return new Response(null, {
         status: 200,
         headers: corsHeaders
@@ -72,29 +53,29 @@ export async function onRequest(context) {
 
     // Check if KV storage is available
     if (!env.SIGNALING_KV) {
-      console.error('KV storage not configured - env.SIGNALING_KV is undefined');
+      console.error('❌ KV storage not configured - env.SIGNALING_KV is undefined');
       return createErrorResponse('KV storage not configured', 500);
     }
 
-    console.log('KV storage is available, processing request...');
+    console.log('✅ KV storage is available, processing request...');
 
     if (method === 'POST') {
-      console.log('Handling POST request...');
+      console.log('📤 Processing POST request');
       return await handlePostRequest(request, env);
     } else if (method === 'GET') {
-      console.log('Handling GET request...');
+      console.log('📥 Processing GET request');
       return await handleGetRequest(request, env);
     } else {
-      console.log(`Unsupported method: ${method}`);
+      console.log(`❌ Unsupported method: ${method}`);
       return createErrorResponse('Method not allowed', 405, {
         method,
         allowed: ['GET', 'POST', 'OPTIONS']
       });
     }
   } catch (error) {
-    console.error('Signaling function error:', error.message);
-    console.error('Full error object:', error);
-    console.error('Error stack:', error.stack);
+    console.error('💥 SIGNALING FUNCTION ERROR:', error.message);
+    console.error('📊 Full error object:', error);
+    console.error('📈 Error stack:', error.stack);
     return createErrorResponse('Internal server error', 500, error.message);
   }
 }
@@ -104,40 +85,45 @@ async function handlePostRequest(request, env) {
   let body;
   try {
     body = await request.json();
+    console.log('📦 POST body received:', JSON.stringify(body, null, 2));
   } catch (error) {
+    console.error('❌ Error parsing JSON:', error.message);
     return createErrorResponse('Invalid JSON in request body', 400);
   }
 
-  const { type, senderId, targetId, data, sessionId } = body;
+  const { type, peerId, data } = body;
 
   // Validate required fields
   if (!type) {
+    console.log('❌ Missing required field: type');
     return createErrorResponse('Missing required field: type');
   }
-  if (!senderId) {
-    return createErrorResponse('Missing required field: senderId');
+  if (!peerId) {
+    console.log('❌ Missing required field: peerId');
+    return createErrorResponse('Missing required field: peerId');
   }
-  if (!targetId) {
-    return createErrorResponse('Missing required field: targetId');
-  }
+
+  console.log(`📤 POST request: type=${type}, peerId=${peerId}`);
 
   // Route based on type
   switch (type) {
     case 'offer':
+      if (!data) {
+        console.log('❌ Missing required field: data for type offer');
+        return createErrorResponse('Missing required field: data for type offer');
+      }
+      return await handleStoreOffer(peerId, data, env);
     case 'answer':
       if (!data) {
-        return createErrorResponse(`Missing required field: data for type ${type}`);
+        console.log('❌ Missing required field: data for type answer');
+        return createErrorResponse('Missing required field: data for type answer');
       }
-      return await handleStoreSignaling(type, senderId, targetId, data, sessionId, env);
-    case 'candidate':
-      if (!data) {
-        return createErrorResponse('Missing required field: data for type candidate');
-      }
-      return await handleStoreCandidate(senderId, targetId, data, sessionId, env);
+      return await handleStoreAnswer(peerId, data, env);
     case 'cleanup':
-      return await handleCleanup(senderId, targetId, sessionId, env);
+      return await handleCleanup(peerId, env);
     default:
-      return createErrorResponse(`Invalid type: ${type}. Valid types are: offer, answer, candidate, cleanup`);
+      console.log(`❌ Invalid type: ${type}`);
+      return createErrorResponse(`Invalid type: ${type}. Valid types are: offer, answer, cleanup`);
   }
 }
 
@@ -146,27 +132,25 @@ async function handleGetRequest(request, env) {
   try {
     const url = new URL(request.url);
     const type = url.searchParams.get('type');
-    const targetId = url.searchParams.get('targetId');
-    const senderId = url.searchParams.get('senderId'); // Optional
-    const sessionId = url.searchParams.get('sessionId'); // Optional
+    const peerId = url.searchParams.get('peerId');
 
-    console.log(`GET request params: type=${type}, targetId=${targetId}, senderId=${senderId || 'none'}, sessionId=${sessionId || 'none'}`);
+    console.log(`📥 GET request params: type=${type}, peerId=${peerId}`);
 
     // Validate required fields
     if (!type) {
-      console.log('Missing type parameter');
+      console.log('❌ Missing type parameter');
       return createErrorResponse('Missing required query parameter: type');
     }
-    if (!targetId) {
-      console.log('Missing targetId parameter');
-      return createErrorResponse('Missing required query parameter: targetId');
+    if (!peerId) {
+      console.log('❌ Missing peerId parameter');
+      return createErrorResponse('Missing required query parameter: peerId');
     }
 
-    console.log('Calling handlePollSignaling...');
-    return await handlePollSignaling(type, targetId, senderId, sessionId, env);
+    console.log(`🔍 Polling for ${type} with peerId: ${peerId}`);
+    return await handlePollSignaling(type, peerId, env);
   } catch (error) {
-    console.error('Error in handleGetRequest:', error.message);
-    console.error('Full error:', error);
+    console.error('💥 Error in handleGetRequest:', error.message);
+    console.error('📊 Full error:', error);
     // Return a safe response instead of 500 error
     return createSuccessResponse({
       found: false,
@@ -177,171 +161,109 @@ async function handleGetRequest(request, env) {
   }
 }
 
-// Store signaling data in KV (for offer/answer)
-async function handleStoreSignaling(type, senderId, targetId, data, sessionId, env) {
+// Store offer in KV
+async function handleStoreOffer(peerId, data, env) {
   try {
-    const key = getSignalingKey(type, targetId, senderId, null, sessionId);
-    const signalingData = {
-      type,
-      senderId,
-      targetId,
-      data,
-      sessionId: sessionId || null,
+    const key = getSignalingKey('offer', peerId);
+    const offerData = {
+      type: 'offer',
+      peerId: peerId,
+      data: data,
       timestamp: Date.now()
     };
 
-    // Store in KV with 5 minute expiration
-    await env.SIGNALING_KV.put(key, JSON.stringify(signalingData), { expirationTtl: 300 });
-
-    return createSuccessResponse({ 
-      success: true, 
-      message: `${type} stored successfully`,
-      type,
-      senderId,
-      targetId,
-      sessionId: sessionId || null,
-      timestamp: signalingData.timestamp
+    console.log(`💾 Storing offer with key: ${key}`);
+    await env.SIGNALING_KV.put(key, JSON.stringify(offerData), { expirationTtl: 300 });
+    console.log(`✅ Offer stored successfully for peerId: ${peerId}`);
+    
+    return createSuccessResponse({
+      success: true,
+      message: `Offer stored successfully for peerId: ${peerId}`,
+      type: 'offer',
+      peerId: peerId,
+      timestamp: offerData.timestamp
     });
   } catch (error) {
-    console.error(`Error storing ${type}:`, error.message);
-    return createErrorResponse(`Failed to store ${type}`, 500, error.message);
+    console.error(`❌ Error storing offer:`, error.message);
+    return createErrorResponse(`Failed to store offer`, 500, error.message);
   }
 }
 
-// Store ICE candidate in KV (supports multiple candidates)
-async function handleStoreCandidate(senderId, targetId, data, sessionId, env) {
+// Store answer in KV
+async function handleStoreAnswer(peerId, data, env) {
   try {
-    // Get existing candidate count for this sender-target pair
-    const prefix = getPollingKey('candidate', targetId) + senderId;
-    const listResult = await env.SIGNALING_KV.list({ prefix });
-    
-    // Use the count as the index for the new candidate
-    const candidateIndex = listResult.keys.length;
-    const key = getSignalingKey('candidate', targetId, senderId, candidateIndex, sessionId);
-    
-    const signalingData = {
-      type: 'candidate',
-      senderId,
-      targetId,
-      data,
-      candidateIndex,
-      sessionId: sessionId || null,
+    const key = getSignalingKey('answer', peerId);
+    const answerData = {
+      type: 'answer',
+      peerId: peerId,
+      data: data,
       timestamp: Date.now()
     };
 
-    // Store in KV with 5 minute expiration
-    await env.SIGNALING_KV.put(key, JSON.stringify(signalingData), { expirationTtl: 300 });
-
-    return createSuccessResponse({ 
-      success: true, 
-      message: `candidate stored successfully`,
-      type: 'candidate',
-      senderId,
-      targetId,
-      candidateIndex,
-      sessionId: sessionId || null,
-      timestamp: signalingData.timestamp
+    console.log(`💾 Storing answer with key: ${key}`);
+    await env.SIGNALING_KV.put(key, JSON.stringify(answerData), { expirationTtl: 300 });
+    console.log(`✅ Answer stored successfully for peerId: ${peerId}`);
+    
+    return createSuccessResponse({
+      success: true,
+      message: `Answer stored successfully for peerId: ${peerId}`,
+      type: 'answer',
+      peerId: peerId,
+      timestamp: answerData.timestamp
     });
   } catch (error) {
-    console.error('Error storing candidate:', error.message);
-    return createErrorResponse('Failed to store candidate', 500, error.message);
+    console.error(`❌ Error storing answer:`, error.message);
+    return createErrorResponse(`Failed to store answer`, 500, error.message);
   }
 }
 
-// Poll for signaling data - Never throws 500 errors
-async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
+
+// Poll for signaling data - Simplified version
+async function handlePollSignaling(type, peerId, env) {
   try {
-    console.log(`Polling for ${type}, targetId: ${targetId}, senderId: ${senderId || 'any'}, sessionId: ${sessionId || 'none'}`);
+    console.log(`🔍 Polling for ${type} with peerId: ${peerId}`);
     
     // Validate input parameters
-    if (!type || !targetId) {
-      console.log('Invalid input parameters');
+    if (!type || !peerId) {
+      console.log('❌ Invalid input parameters');
       return createSuccessResponse({
         found: false,
         message: 'Invalid request parameters',
         timestamp: Date.now()
       });
     }
-    
-    let prefix;
-    if (senderId) {
-      // If senderId is specified, only look for data from that sender
-      prefix = `${type}:${targetId}:${senderId}`;
-    } else {
-      // Otherwise, look for any data for this target
-      prefix = `${type}:${targetId}:`;
-    }
 
-    console.log(`Using prefix: ${prefix}`);
-
-    // Check if KV is available - if not, return safe response
+    // Check if KV is available
     if (!env || !env.SIGNALING_KV) {
-      console.log('KV storage not available - returning safe response');
+      console.log('❌ KV storage not available');
       return createSuccessResponse({
         found: false,
-        message: `No ${type} found for targetId: ${targetId} (KV storage unavailable)`,
+        message: `No ${type} found for peerId: ${peerId} (KV storage unavailable)`,
         timestamp: Date.now()
       });
     }
 
-    let listResult;
-    try {
-      listResult = await env.SIGNALING_KV.list({ prefix });
-      console.log(`KV list returned ${listResult ? listResult.keys.length : 0} keys`);
-    } catch (kvError) {
-      console.log('KV list error - returning safe response:', kvError.message);
-      return createSuccessResponse({
-        found: false,
-        message: `No ${type} found for targetId: ${targetId} (KV access error)`,
-        timestamp: Date.now()
-      });
-    }
-    
-    // Handle null/undefined listResult
-    if (!listResult || !listResult.keys || listResult.keys.length === 0) {
-      console.log(`No ${type} found for targetId: ${targetId}`);
-      return createSuccessResponse({ 
-        found: false,
-        message: `No ${type} found for targetId: ${targetId}${senderId ? ` from senderId: ${senderId}` : ''}${sessionId ? ` with sessionId: ${sessionId}` : ''}`,
-        timestamp: Date.now()
-      });
-    }
-
-    // Special handling for candidate type - return all candidates in a single response
-    if (type === 'candidate') {
-      return await handlePollCandidates(listResult.keys, env);
-    }
-
-    // For offer/answer, get the first available signaling data
-    const key = listResult.keys[0]?.name;
-    if (!key) {
-      console.log('No valid key found in list result');
-      return createSuccessResponse({
-        found: false,
-        message: `No ${type} found for targetId: ${targetId}`,
-        timestamp: Date.now()
-      });
-    }
-    
-    console.log(`Retrieving data for key: ${key}`);
+    // Get the key for this type and peerId
+    const key = getSignalingKey(type, peerId);
+    console.log(`🔑 Looking for key: ${key}`);
     
     let signalingDataStr;
     try {
       signalingDataStr = await env.SIGNALING_KV.get(key);
     } catch (kvError) {
-      console.log('KV get error - returning safe response:', kvError.message);
+      console.log('❌ KV get error:', kvError.message);
       return createSuccessResponse({
         found: false,
-        message: `No ${type} found for targetId: ${targetId} (KV access error)`,
+        message: `No ${type} found for peerId: ${peerId} (KV access error)`,
         timestamp: Date.now()
       });
     }
     
     if (!signalingDataStr) {
-      console.log(`No data found for key: ${key}`);
+      console.log(`❌ No ${type} found for peerId: ${peerId}`);
       return createSuccessResponse({ 
         found: false,
-        message: `No ${type} found for targetId: ${targetId}${senderId ? ` from senderId: ${senderId}` : ''}${sessionId ? ` with sessionId: ${sessionId}` : ''}`,
+        message: `No ${type} found for peerId: ${peerId}`,
         timestamp: Date.now()
       });
     }
@@ -349,271 +271,124 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
     let signalingData;
     try {
       signalingData = JSON.parse(signalingDataStr);
-      console.log(`Parsed signaling data for ${type}`);
+      console.log(`✅ Parsed ${type} data for peerId: ${peerId}`);
     } catch (parseError) {
-      console.log(`Error parsing signaling data for key ${key} - cleaning up and returning safe response:`, parseError.message);
-      // Try to delete the corrupted data (don't fail if this fails)
+      console.log(`❌ Error parsing ${type} data for key ${key}:`, parseError.message);
+      // Try to delete the corrupted data
       try {
         await env.SIGNALING_KV.delete(key);
-        console.log('Deleted corrupted data');
+        console.log('🗑️ Deleted corrupted data');
       } catch (deleteError) {
-        console.log('Error deleting corrupted data (non-critical):', deleteError.message);
+        console.log('⚠️ Error deleting corrupted data (non-critical):', deleteError.message);
       }
       return createSuccessResponse({
         found: false,
-        message: `No ${type} found for targetId: ${targetId} (data corruption detected and cleaned)`,
+        message: `No ${type} found for peerId: ${peerId} (data corruption detected and cleaned)`,
         timestamp: Date.now()
       });
     }
     
-    // Validate required fields - if invalid, clean up and return safe response
+    // Validate required fields
     if (!signalingData || typeof signalingData !== 'object' || 
-        !signalingData.type || !signalingData.senderId || !signalingData.targetId || !signalingData.data) {
-      console.log(`Invalid signaling data structure for key ${key} - cleaning up and returning safe response`);
-      // Try to delete the invalid data (don't fail if this fails)
+        !signalingData.type || !signalingData.peerId || !signalingData.data) {
+      console.log(`❌ Invalid ${type} data structure for key ${key}`);
+      // Try to delete the invalid data
       try {
         await env.SIGNALING_KV.delete(key);
-        console.log('Deleted invalid data');
+        console.log('🗑️ Deleted invalid data');
       } catch (deleteError) {
-        console.log('Error deleting invalid data (non-critical):', deleteError.message);
+        console.log('⚠️ Error deleting invalid data (non-critical):', deleteError.message);
       }
       return createSuccessResponse({
         found: false,
-        message: `No ${type} found for targetId: ${targetId} (invalid data detected and cleaned)`,
+        message: `No ${type} found for peerId: ${peerId} (invalid data detected and cleaned)`,
         timestamp: Date.now()
       });
     }
     
-    // Delete the consumed data to prevent re-polling (don't fail if this fails)
+    // Delete the consumed data to prevent re-polling
     try {
       await env.SIGNALING_KV.delete(key);
-      console.log(`Deleted consumed data for key: ${key}`);
+      console.log(`🗑️ Deleted consumed ${type} data for peerId: ${peerId}`);
     } catch (deleteError) {
-      console.log('Error deleting consumed data (non-critical):', deleteError.message);
-      // Continue anyway, don't fail the request
+      console.log('⚠️ Error deleting consumed data (non-critical):', deleteError.message);
     }
 
-    console.log(`Successfully retrieved ${type} for targetId: ${targetId}`);
+    console.log(`✅ Successfully retrieved ${type} for peerId: ${peerId}`);
     return createSuccessResponse({ 
       found: true,
       type: signalingData.type,
-      senderId: signalingData.senderId,
-      targetId: signalingData.targetId,
+      peerId: signalingData.peerId,
       data: signalingData.data,
-      sessionId: signalingData.sessionId || null,
       timestamp: signalingData.timestamp || Date.now()
     });
   } catch (error) {
-    console.log(`Unexpected error polling ${type} - returning safe response:`, error.message);
-    // Never return 500 error - always return a safe response
+    console.log(`💥 Unexpected error polling ${type} - returning safe response:`, error.message);
     return createSuccessResponse({
       found: false,
-      message: `No ${type} found for targetId: ${targetId} (unexpected error)`,
+      message: `No ${type} found for peerId: ${peerId} (unexpected error)`,
       timestamp: Date.now()
     });
   }
 }
 
-// Handle polling for multiple candidates - Never throws 500 errors
-async function handlePollCandidates(keys, env) {
+
+// Handle cleanup - Simplified version
+async function handleCleanup(peerId, env) {
   try {
-    console.log(`Processing ${keys ? keys.length : 0} candidate keys`);
-    
-    // Validate input
-    if (!keys || !Array.isArray(keys) || keys.length === 0) {
-      console.log('No candidate keys provided');
-      return createSuccessResponse({ 
-        found: false,
-        message: 'No candidates found',
-        timestamp: Date.now()
-      });
-    }
-
-    // Check if KV is available
-    if (!env || !env.SIGNALING_KV) {
-      console.log('KV storage not available for candidate polling');
-      return createSuccessResponse({ 
-        found: false,
-        message: 'No candidates found (KV storage unavailable)',
-        timestamp: Date.now()
-      });
-    }
-
-    const candidates = [];
-    const keysToDelete = [];
-    let targetId = null;
-    let senderId = null;
-
-    // Collect all candidate data
-    for (const keyInfo of keys) {
-      if (!keyInfo || !keyInfo.name) {
-        console.log('Skipping invalid key info');
-        continue;
-      }
-
-      let signalingDataStr;
-      try {
-        signalingDataStr = await env.SIGNALING_KV.get(keyInfo.name);
-      } catch (kvError) {
-        console.log(`KV get error for key ${keyInfo.name} - skipping:`, kvError.message);
-        continue;
-      }
-      
-      if (signalingDataStr) {
-        let signalingData;
-        try {
-          signalingData = JSON.parse(signalingDataStr);
-        } catch (parseError) {
-          console.log(`Error parsing candidate data for key ${keyInfo.name} - cleaning up:`, parseError.message);
-          // Try to delete the corrupted data (don't fail if this fails)
-          try {
-            await env.SIGNALING_KV.delete(keyInfo.name);
-            console.log('Deleted corrupted candidate data');
-          } catch (deleteError) {
-            console.log('Error deleting corrupted candidate data (non-critical):', deleteError.message);
-          }
-          continue;
-        }
-        
-        // Validate required fields
-        if (!signalingData || typeof signalingData !== 'object' ||
-            !signalingData.type || !signalingData.senderId || !signalingData.targetId || !signalingData.data) {
-          console.log(`Invalid candidate data structure for key ${keyInfo.name} - cleaning up`);
-          // Try to delete the invalid data (don't fail if this fails)
-          try {
-            await env.SIGNALING_KV.delete(keyInfo.name);
-            console.log('Deleted invalid candidate data');
-          } catch (deleteError) {
-            console.log('Error deleting invalid candidate data (non-critical):', deleteError.message);
-          }
-          continue;
-        }
-        
-        // Get targetId and senderId from the first valid data entry
-        if (!targetId) {
-          targetId = signalingData.targetId;
-          senderId = signalingData.senderId;
-        }
-        
-        candidates.push({
-          data: signalingData.data,
-          candidateIndex: signalingData.candidateIndex || null,
-          sessionId: signalingData.sessionId || null,
-          timestamp: signalingData.timestamp || Date.now()
-        });
-        keysToDelete.push(keyInfo.name);
-      }
-    }
-
-    // Delete all consumed candidate data (don't fail if this fails)
-    for (const key of keysToDelete) {
-      try {
-        await env.SIGNALING_KV.delete(key);
-        console.log(`Deleted consumed candidate data for key: ${key}`);
-      } catch (deleteError) {
-        console.log(`Error deleting consumed candidate data for key ${key} (non-critical):`, deleteError.message);
-        // Continue anyway, don't fail the request
-      }
-    }
-
-    if (candidates.length === 0) {
-      console.log('No valid candidates found after processing');
-      return createSuccessResponse({ 
-        found: false,
-        message: 'No candidates found',
-        timestamp: Date.now()
-      });
-    }
-
-    // Sort candidates by index for consistent ordering
-    candidates.sort((a, b) => (a.candidateIndex || 0) - (b.candidateIndex || 0));
-
-    console.log(`Successfully retrieved ${candidates.length} candidates`);
-    return createSuccessResponse({ 
-      found: true,
-      type: 'candidate',
-      targetId: targetId,
-      senderId: senderId,
-      candidates: candidates,
-      count: candidates.length,
-      timestamp: Date.now()
-    });
-  } catch (error) {
-    console.log('Unexpected error polling candidates - returning safe response:', error.message);
-    // Never return 500 error - always return a safe response
-    return createSuccessResponse({ 
-      found: false,
-      message: 'No candidates found (unexpected error)',
-      timestamp: Date.now()
-    });
-  }
-}
-
-// Handle cleanup
-async function handleCleanup(senderId, targetId, sessionId, env) {
-  try {
+    console.log(`🗑️ Cleaning up signaling data for peerId: ${peerId}`);
     let deletedCount = 0;
     
-    // If both senderId and targetId are empty, do global cleanup
-    if (!senderId && !targetId) {
-      const types = ['offer', 'answer', 'candidate'];
+    // If peerId is empty, do global cleanup
+    if (!peerId) {
+      console.log('🌍 Performing global cleanup of all signaling data');
       
-      for (const type of types) {
-        const listResult = await env.SIGNALING_KV.list({ prefix: `${type}:` });
-        
-        for (const keyInfo of listResult.keys) {
-          await env.SIGNALING_KV.delete(keyInfo.name);
-          deletedCount++;
-        }
+      // Get all keys and delete them
+      const listResult = await env.SIGNALING_KV.list();
+      for (const keyInfo of listResult.keys) {
+        await env.SIGNALING_KV.delete(keyInfo.name);
+        deletedCount++;
+        console.log(`🗑️ Deleted key: ${keyInfo.name}`);
       }
       
-      return createSuccessResponse({ 
-        success: true, 
-        message: `Global cleanup: deleted ${deletedCount} signaling entries`,
+      console.log(`✅ Global cleanup completed: ${deletedCount} entries deleted`);
+      return createSuccessResponse({
+        success: true,
+        message: `Cleaned up ${deletedCount} signaling entries globally`,
         type: 'cleanup',
-        senderId: '',
-        targetId: '',
-        sessionId: '',
+        peerId: null,
         deletedCount,
         timestamp: Date.now()
       });
     }
     
-    // Clean up all types for this sender-target pair
+    // Clean up specific peerId
     const types = ['offer', 'answer'];
     
-    // Clean up offer and answer (single entries)
     for (const type of types) {
-      const key = getSignalingKey(type, targetId, senderId, null, sessionId);
+      const key = getSignalingKey(type, peerId);
       const existing = await env.SIGNALING_KV.get(key);
-      
       if (existing) {
         await env.SIGNALING_KV.delete(key);
         deletedCount++;
+        console.log(`🗑️ Deleted ${type} key: ${key}`);
+      } else {
+        console.log(`ℹ️ No ${type} found for key: ${key}`);
       }
     }
     
-    // Clean up all candidates for this sender-target pair (multiple entries)
-    const candidatePrefix = getPollingKey('candidate', targetId) + senderId;
-    const candidateListResult = await env.SIGNALING_KV.list({ prefix: candidatePrefix });
-    
-    for (const keyInfo of candidateListResult.keys) {
-      await env.SIGNALING_KV.delete(keyInfo.name);
-      deletedCount++;
-    }
-
-    return createSuccessResponse({ 
-      success: true, 
-      message: `Cleaned up ${deletedCount} signaling entries`,
+    console.log(`✅ Cleanup completed for peerId ${peerId}: ${deletedCount} entries deleted`);
+    return createSuccessResponse({
+      success: true,
+      message: `Cleaned up ${deletedCount} signaling entries for peerId: ${peerId}`,
       type: 'cleanup',
-      senderId,
-      targetId,
-      sessionId: sessionId || null,
+      peerId: peerId,
       deletedCount,
       timestamp: Date.now()
     });
   } catch (error) {
-    console.error('Error during cleanup:', error.message);
+    console.error('❌ Error during cleanup:', error.message);
     return createErrorResponse('Failed to cleanup signaling data', 500, error.message);
   }
 }
+

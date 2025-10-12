@@ -148,31 +148,27 @@ $(document).ready(() => {
 
   // Handle delete all button click
   $("#delete-all-btn").click(() => {
+    console.log('🗑️ Global cleanup requested');
     fetch(SIGNALING_URL, {
       method: "POST",
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         type: "cleanup", 
-        senderId: "", // Empty senderId for global cleanup
-        targetId: "", // Empty targetId for global cleanup
-        sessionId: "" // Empty sessionId for global cleanup
+        peerId: "" // Empty peerId for global cleanup
       }),
     })
       .then((res) => res.json())
       .then((result) => {
+        console.log('✅ Global cleanup completed:', result);
         showAlert(`Deleted all SDP entries: ${result.message}`, false);
-        // Clear all stored session IDs
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('sessionId-')) {
-            localStorage.removeItem(key);
-          }
-        });
-        // Wait 3 seconds before reloading
         setTimeout(() => {
           location.reload();
         }, 3000);
       })
-      .catch((err) => showAlert(`Error deleting SDP entries: ${err}`));
+      .catch((err) => {
+        console.error('❌ Global cleanup error:', err);
+        showAlert(`Error deleting SDP entries: ${err}`);
+      });
   });
 
   // Handle Join button click
@@ -532,24 +528,19 @@ function waitForIceGathering(pc) {
 }
 
 async function submitSDP(peerId, role, sdp) {
-  updateConnectionStatus("Submitting Offer...", "90", false);
+  updateConnectionStatus(`Submitting ${role}...`, "90", false);
   
   try {
-    // Generate a session ID for this connection
-    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    
-    // Get the current user's peer ID (the sender)
-    const currentPeerId = localStorage.getItem("peerIds") || "peer123";
+    console.log(`📤 Submitting ${role} SDP for peerId: ${peerId}`);
+    console.log(`📦 SDP data: ${sdp.substring(0, 100)}...`);
     
     const response = await fetch(SIGNALING_URL, {
       method: "POST",
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         type: role, 
-        senderId: currentPeerId, // The current user is the sender
-        targetId: peerId, // The target peer we want to connect to
-        data: sdp,
-        sessionId: sessionId
+        peerId: peerId,
+        data: sdp
       }),
     });
     
@@ -558,35 +549,20 @@ async function submitSDP(peerId, role, sdp) {
     }
     
     const result = await response.json();
-    console.log(`Submitted ${role} SDP from ${currentPeerId} to ${peerId}`, result);
-    updateConnectionStatus("Offer Submitted", "99", false);
+    console.log(`✅ Submitted ${role} SDP for peerId: ${peerId}`, result);
+    updateConnectionStatus(`${role} Submitted`, "99", false);
     
-    // Store session ID for this connection
-    if (result.success) {
-      localStorage.setItem(`sessionId-${peerId}`, sessionId);
-    }
   } catch (error) {
-    console.error(`Error submitting ${role} SDP:`, error);
+    console.error(`❌ Error submitting ${role} SDP:`, error);
     throw error;
   }
 }
 
 async function fetchSDP(peerId, role) {
   try {
-    // Get the current user's peer ID (the target)
-    const currentPeerId = localStorage.getItem("peerIds") || "peer123";
+    console.log(`📥 Fetching ${role} SDP for peerId: ${peerId}`);
     
-    // For shared peerId scenario, don't use sessionId filtering
-    // because both users have the same peerId but different sessionIds
-    let url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&targetId=${encodeURIComponent(currentPeerId)}`;
-    
-    // Only use sessionId if we're connecting to a different peer (not shared peerId)
-    if (peerId !== currentPeerId) {
-      const sessionId = localStorage.getItem(`sessionId-${peerId}`);
-      if (sessionId) {
-        url += `&sessionId=${encodeURIComponent(sessionId)}`;
-      }
-    }
+    const url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&peerId=${encodeURIComponent(peerId)}`;
     
     const response = await fetch(url, {
       method: "GET",
@@ -600,32 +576,21 @@ async function fetchSDP(peerId, role) {
     const result = await response.json();
     
     if (result.found) {
-      console.log(`Found ${role} SDP for current user ${currentPeerId} from senderId: ${result.senderId}`);
+      console.log(`✅ Found ${role} SDP for peerId: ${peerId}`);
+      console.log(`📦 SDP data: ${result.data.substring(0, 100)}...`);
       
-      // Handle different response formats
-      if (role === 'candidate' && result.candidates) {
-        // Handle candidate array response
-        return {
-          peerId: result.senderId,
-          role: role,
-          candidates: result.candidates,
-          count: result.count
-        };
-      } else {
-        // Handle single SDP response (offer/answer)
-        return { 
-          peerId: result.senderId,
-          role: role, 
-          sdp: result.data,
-          sessionId: result.sessionId
-        };
-      }
+      return { 
+        peerId: result.peerId,
+        role: role, 
+        sdp: result.data,
+        timestamp: result.timestamp
+      };
     } else {
-      console.log(`No ${role} SDP found for current user ${currentPeerId}`);
+      console.log(`❌ No ${role} SDP found for peerId: ${peerId}`);
       return null;
     }
   } catch (e) {
-    console.error(`Failed to fetch ${role} SDP for current user:`, e);
+    console.error(`❌ Failed to fetch ${role} SDP for peerId: ${peerId}:`, e);
     return null;
   }
 }
@@ -1421,33 +1386,25 @@ function displayMessage(
 }
 function deletePeerFromSheet(peerId) {
   if (!peerId) {
-    console.error("peerId is undefined in deletePeerFromSheet");
+    console.error("❌ peerId is undefined in deletePeerFromSheet");
     return;
   }
   
-  // Get the current user's peer ID
-  const currentPeerId = localStorage.getItem("peerIds") || "peer123";
-  
-  // Get session ID for this peer if available
-  const sessionId = localStorage.getItem(`sessionId-${peerId}`);
+  console.log(`🗑️ Cleaning up signaling data for peerId: ${peerId}`);
   
   fetch(SIGNALING_URL, {
     method: "POST",
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
       type: "cleanup", 
-      senderId: currentPeerId, // Current user is the sender
-      targetId: peerId, // Target peer to clean up
-      sessionId: sessionId
+      peerId: peerId
     }),
   })
     .then((res) => res.json())
     .then((result) => {
-      console.log("Deleted SDP for peerId:", peerId, result);
-      // Clean up stored session ID
-      localStorage.removeItem(`sessionId-${peerId}`);
+      console.log(`✅ Cleaned up signaling data for peerId: ${peerId}`, result);
     })
-    .catch((err) => console.error("Delete error for peerId:", peerId, err));
+    .catch((err) => console.error(`❌ Cleanup error for peerId: ${peerId}:`, err));
 }
 
 async function startJoinConnection(peerId) {
