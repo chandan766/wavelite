@@ -576,12 +576,16 @@ async function fetchSDP(peerId, role) {
     // Get the current user's peer ID (the target)
     const currentPeerId = localStorage.getItem("peerIds") || "peer123";
     
-    // Get session ID for this peer if available
-    const sessionId = localStorage.getItem(`sessionId-${peerId}`);
+    // For shared peerId scenario, don't use sessionId filtering
+    // because both users have the same peerId but different sessionIds
     let url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&targetId=${encodeURIComponent(currentPeerId)}`;
     
-    if (sessionId) {
-      url += `&sessionId=${encodeURIComponent(sessionId)}`;
+    // Only use sessionId if we're connecting to a different peer (not shared peerId)
+    if (peerId !== currentPeerId) {
+      const sessionId = localStorage.getItem(`sessionId-${peerId}`);
+      if (sessionId) {
+        url += `&sessionId=${encodeURIComponent(sessionId)}`;
+      }
     }
     
     const response = await fetch(url, {
