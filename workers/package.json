@@ -1,0 +1,23 @@
+{
+  "name": "wavelite-signaling-worker",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker for WaveLite WebRTC signaling",
+  "main": "signaling.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "wrangler dev --local"
+  },
+  "keywords": [
+    "webrtc",
+    "signaling",
+    "cloudflare-worker",
+    "p2p",
+    "chat"
+  ],
+  "author": "WaveLite Team",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  }
+}

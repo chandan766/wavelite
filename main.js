@@ -1,20 +1,441 @@
-$(document).ready(function(){$('#stunServerCollapse').on('shown.bs.collapse',()=>{$('#stunToggleIcon').removeClass('fa-chevron-down').addClass('fa-chevron-up')});$('#stunServerCollapse').on('hidden.bs.collapse',()=>{$('#stunToggleIcon').removeClass('fa-chevron-up').addClass('fa-chevron-down')});$('#btn-toggle-back').click(()=>{$('#media-input-group').addClass('d-none');$('#text-input-group').removeClass('d-none');$('#chat-file').val('')});$('#btn-toggle').on('click',()=>{$('#chat-message').blur();$('#attachment-menu').toggleClass('d-none')});$(document).on('click',(e)=>{if(!$(e.target).closest('#attachment-menu, #btn-toggle').length){$('#attachment-menu').addClass('d-none')}});$('.attachment-btn').on('click',function(){const type=$(this).data('type');const $input=$('#chat-file');$input.removeAttr('accept capture');switch(type){case 'image':$input.attr('accept','image/*');showFileInput(type);break;case 'camera':$input.attr('accept','image/*').attr('capture','environment');showFileInput(type);break;case 'video':$input.attr('accept','video/*');showFileInput(type);break;case 'audio':$input.attr('accept','audio/*');showFileInput(type);break;case 'doc':$input.attr('accept','.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.odt');showFileInput(type);break;case 'file':showFileInput(type);break;case 'record-voice':startVoiceRecording();break;case 'record-video':startVideoRecording();break;case 'location':initMapModal();break;case 'link':const url=prompt('Enter a link to share:');if(url&&url.startsWith('http'))sendLinkMessage(url);break}
-$('#attachment-menu').addClass('d-none')});let mediaRecorder,recordedChunks=[],voiceTimerInterval,voiceSeconds=0,videoTimerInterval,videoSeconds=0;function showFileInput(type){$('#chat-file').data('attachment-type',type);$('#chat-file').click();$('#media-input-group').removeClass('d-none');$('#text-input-group').addClass('d-none')}
-function startVoiceRecording(){if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){alert('Media recording not supported on this browser.');return}
-navigator.mediaDevices.getUserMedia({audio:!0}).then(stream=>{mediaRecorder=new MediaRecorder(stream);recordedChunks=[];mediaRecorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data);};mediaRecorder.onstop=()=>{clearInterval(voiceTimerInterval);$('#voiceRecordingTimer').text('00:00');voiceSeconds=0;const blob=new Blob(recordedChunks,{type:'audio/webm'});attachBlobToFileInput(blob,'record-voice.webm')};mediaRecorder.start();$('#voiceRecordingModal').modal('show');startVoiceTimer()}).catch(err=>alert('Microphone access denied or not available'))}
-function startVoiceTimer(){voiceTimerInterval=setInterval(()=>{voiceSeconds++;const mins=String(Math.floor(voiceSeconds/60)).padStart(2,'0');const secs=String(voiceSeconds%60).padStart(2,'0');$('#voiceRecordingTimer').text(`${mins}:${secs}`)},1000)}
-$('#stopVoiceRecordingBtn').on('click',()=>{if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();$('#voiceRecordingModal').modal('hide')}});function startVideoRecording(){if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){alert('Media recording not supported on this browser.');return}
-navigator.mediaDevices.getUserMedia({video:!0,audio:!0}).then(stream=>{mediaRecorder=new MediaRecorder(stream);recordedChunks=[];const videoEl=$('#videoPreview')[0];videoEl.srcObject=stream;$('#videoRecordingModal').modal('show');mediaRecorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data);};mediaRecorder.onstop=()=>{clearInterval(voiceTimerInterval);$('#videoRecordingTimer').text('00:00');voiceSeconds=0;const blob=new Blob(recordedChunks,{type:'video/webm'});attachBlobToFileInput(blob,'record-video.webm');stream.getTracks().forEach(track=>track.stop())};mediaRecorder.start();startVoiceTimer()}).catch(err=>alert('Camera access denied'))}
-function startVideoTimer(){videoTimerInterval=setInterval(()=>{videoSeconds++;const mins=String(Math.floor(videoSeconds/60)).padStart(2,'0');const secs=String(videoSeconds%60).padStart(2,'0');$('#videoRecordingTimer').text(`${mins}:${secs}`)},1000)}
-function resetVideoTimer(){clearInterval(videoTimerInterval);$('#videoRecordingTimer').text('00:00');videoSeconds=0}
-$('#stopVideoRecordingBtn').on('click',()=>{if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();$('#videoRecordingModal').modal('hide')}});let useFrontCamera=!0;let currentStream;function startVideoRecording(){if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){alert('Media recording not supported on this browser.');return}
-const constraints={video:{facingMode:useFrontCamera?'user':'environment'},audio:!0};navigator.mediaDevices.getUserMedia(constraints).then(stream=>{currentStream=stream;mediaRecorder=new MediaRecorder(stream);recordedChunks=[];const videoEl=$('#videoPreview')[0];videoEl.srcObject=stream;$('#videoRecordingModal').modal('show');mediaRecorder.ondataavailable=e=>{if(e.data.size)recordedChunks.push(e.data);};mediaRecorder.onstop=()=>{resetVideoTimer();const blob=new Blob(recordedChunks,{type:'video/webm'});attachBlobToFileInput(blob,'record-video.webm');currentStream.getTracks().forEach(track=>track.stop())};mediaRecorder.start();startVideoTimer()}).catch(err=>alert('Camera access denied'))}
-$('#stopVideoRecordingBtn').on('click',()=>{if(mediaRecorder&&mediaRecorder.state==='recording'){mediaRecorder.stop();$('#videoRecordingModal').modal('hide')}});$('#switchCameraBtn').on('click',()=>{useFrontCamera=!useFrontCamera;if(currentStream)currentStream.getTracks().forEach(track=>track.stop());startVideoRecording()});function sendLinkMessage(url){var url_=`<a href="${url}" target="_blank">${truncateName(url,20)}</a>`;sendTextMessage(url)}
-function attachBlobToFileInput(blob,filename){const file=new File([blob],filename,{type:blob.type});const dataTransfer=new DataTransfer();dataTransfer.items.add(file);const $fileInput=$('#chat-file')[0];$fileInput.files=dataTransfer.files;$($fileInput).trigger('change');$('#media-input-group').removeClass('d-none');$('#text-input-group').addClass('d-none')}
-function sendTextMessage(msg){$('#chat-message').val(msg)}
-let selectedLatLng=null;let map,marker;function initMapModal(){$('#locationModal').modal('show');setTimeout(()=>{if(!map){map=L.map('map').setView([20.5937,78.9629],5);L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);marker=L.marker([20.5937,78.9629],{draggable:!0}).addTo(map);map.on('click',function(e){selectedLatLng=e.latlng;marker.setLatLng(selectedLatLng)})}else{map.invalidateSize()}},300)}
-function geocodeLocation(query){if(!query)return;const url=`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;fetch(url).then(res=>res.json()).then(data=>{if(data&&data.length>0){const result=data[0];const latlng={lat:parseFloat(result.lat),lng:parseFloat(result.lon)};selectedLatLng=latlng;marker.setLatLng(latlng);map.setView(latlng,14)}else{alert('No location found.')}}).catch(()=>alert('Location search failed.'))}
-$('#btnCurrentLocation').click(()=>{navigator.geolocation.getCurrentPosition(pos=>{const{latitude,longitude}=pos.coords;selectedLatLng={lat:latitude,lng:longitude};marker.setLatLng(selectedLatLng);map.setView(selectedLatLng,15)},()=>alert('Unable to get current location'))});$('#btnSearchLocation').click(()=>{const query=$('#location-search').val().trim();geocodeLocation(query)});$('#btnSendLocation').click(()=>{if(!selectedLatLng){alert('Select a location first.');return}
-const{lat,lng}=selectedLatLng;const gmapUrl=`https://maps.google.com/?q=${lat},${lng}`;const message=JSON.stringify({type:'location',lat,lng,url:gmapUrl,name:truncateName(gmapUrl,25),messageId:Date.now()});if(dataChannel&&dataChannel.readyState==='open'){dataChannel.send(message);displayMessage('Me',message,!0,'location',null,message.messageId,'sent')}
-$('#locationModal').modal('hide')});$('#saveGeminiKeyBtn').click(()=>{const key=$('#geminiApiKey').val().trim();if(!key)return alert("Please enter an API key");localStorage.setItem("gemini_api_key",key);$('#settingAi').modal('hide');showAlert("Gemini API key saved successfully",!1)});$('#ai-btn').click(()=>{if(typeof window.autoCheckInterval!=='undefined'){clearInterval(window.autoCheckInterval)}
-$('#ai-btn').addClass('d-none');$('#login-section').addClass('d-none');$('#reloadBtn').addClass('d-none');$('#chat-section').removeClass('d-none');$('#headerBtnName').html('<i class="fas fa-robot"></i> Jarvis');$('#btn-toggle').addClass('d-none');$('#chat-message').val('');$('#settingBtn').attr('data-bs-target','#settingAi');$('#delete-all-btn').wrap('<div class="d-flex align-items-center"></div>');$('<button id="backBtn" class="btn btn-link text-white fs-6 p-0 text-decoration-none fw-bold border-0 me-2"><i class="fas fa-arrow-left"></i></button>').insertBefore('#delete-all-btn').click(()=>{location.reload()});$('#delete-all-btn').removeAttr('id');$('#btn-send-text').off('click').on('click',async()=>{const msg=$('#chat-message').val().trim();if(!msg)return;displayMessage("You",msg,!0,'text',null,Date.now().toString(),'sent');$('#chat-message').val('');const reply=await getGeminiReply(msg);displayMessage("Jarvis",reply,!1,'text',null,Date.now().toString(),'delivered')});const apiKey=localStorage.getItem("gemini_api_key");if(!apiKey){const aiModal=new bootstrap.Modal(document.getElementById('settingAi'));aiModal.show()}});async function getGeminiReply(userMessage){const apiKey=localStorage.getItem("gemini_api_key");if(!apiKey)return"Please set the API key in settings";try{const response=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({contents:[{parts:[{text:`Reply like a friendly human:\n${userMessage}`}]}]})});const data=await response.json();return data?.candidates?.[0]?.content?.parts?.[0]?.text||"🤖 Sorry, I don't understand."}catch(e){console.error("Gemini error:",e);return"🤖 Error connecting to Gemini."}}});function loadApiKey(){const apiKey=localStorage.getItem("gemini_api_key")||"";$('#geminiApiKey').val(apiKey)}
+ $(document).ready(function () {
+
+      $('#stunServerCollapse').on('shown.bs.collapse', () => {
+        $('#stunToggleIcon').removeClass('fa-chevron-down').addClass('fa-chevron-up');
+      });
+
+      $('#stunServerCollapse').on('hidden.bs.collapse', () => {
+        $('#stunToggleIcon').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+      });
+
+      // Toggle back to text input mode
+      $('#btn-toggle-back').click(() => {
+        $('#media-input-group').addClass('d-none');
+        $('#text-input-group').removeClass('d-none');
+        $('#chat-file').val('');
+      });
+      // Handle toggle
+      $('#btn-toggle').on('click', () => {
+        // Hide keyboard if open
+        $('#chat-message').blur();
+
+        // Toggle menu
+        $('#attachment-menu').toggleClass('d-none');
+      });
+
+      // Auto hide when tapping outside (optional)
+      $(document).on('click', (e) => {
+        if (!$(e.target).closest('#attachment-menu, #btn-toggle').length) {
+          $('#attachment-menu').addClass('d-none');
+        }
+      });
+
+     $('.attachment-btn').on('click', function () {
+        const type = $(this).data('type');
+        const $input = $('#chat-file');
+
+        // Reset
+        $input.removeAttr('accept capture');
+
+        switch (type) {
+          case 'image':
+            $input.attr('accept', 'image/*');
+            showFileInput(type);
+            break;
+
+          case 'camera':
+            $input.attr('accept', 'image/*').attr('capture', 'environment');
+            showFileInput(type);
+            break;
+
+          case 'video':
+            $input.attr('accept', 'video/*');
+            showFileInput(type);
+            break;
+
+          case 'audio':
+            $input.attr('accept', 'audio/*');
+            showFileInput(type);
+            break;
+
+          case 'doc':
+            $input.attr('accept', '.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.odt');
+            showFileInput(type);
+            break;
+
+          case 'file':
+            showFileInput(type);
+            break;
+
+          case 'record-voice':
+            startVoiceRecording();
+            break;
+
+          case 'record-video':
+            startVideoRecording();
+            break;
+
+          case 'location':
+            initMapModal();
+            break;
+
+          case 'link':
+            const url = prompt('Enter a link to share:');
+            if (url && url.startsWith('http')) sendLinkMessage(url);
+            break;
+        }
+
+        $('#attachment-menu').addClass('d-none');
+    });
+    let mediaRecorder, recordedChunks = [], voiceTimerInterval, voiceSeconds = 0,videoTimerInterval, videoSeconds = 0;
+    function showFileInput(type) {
+      $('#chat-file').data('attachment-type', type); // Store type for use later
+      $('#chat-file').click();
+      $('#media-input-group').removeClass('d-none');
+      $('#text-input-group').addClass('d-none');
+    }
+
+    function startVoiceRecording() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Media recording not supported on this browser.');
+        return;
+      }
+
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then(stream => {
+          mediaRecorder = new MediaRecorder(stream);
+          recordedChunks = [];
+
+          mediaRecorder.ondataavailable = e => {
+            if (e.data.size) recordedChunks.push(e.data);
+          };
+
+          mediaRecorder.onstop = () => {
+            clearInterval(voiceTimerInterval);
+            $('#voiceRecordingTimer').text('00:00');
+            voiceSeconds = 0;
+            const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+            attachBlobToFileInput(blob, 'record-voice.webm');
+          };
+
+          mediaRecorder.start();
+
+          // Show modal and start timer
+          $('#voiceRecordingModal').modal('show');
+          startVoiceTimer();
+
+        })
+        .catch(err => alert('Microphone access denied or not available'));
+    }
+
+    function startVoiceTimer() {
+      voiceTimerInterval = setInterval(() => {
+        voiceSeconds++;
+        const mins = String(Math.floor(voiceSeconds / 60)).padStart(2, '0');
+        const secs = String(voiceSeconds % 60).padStart(2, '0');
+        $('#voiceRecordingTimer').text(`${mins}:${secs}`);
+      }, 1000);
+    }
+
+    $('#stopVoiceRecordingBtn').on('click', () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        $('#voiceRecordingModal').modal('hide');
+      }
+    });
+
+
+    function startVideoRecording() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Media recording not supported on this browser.');
+        return;
+      }
+
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+        mediaRecorder = new MediaRecorder(stream);
+        recordedChunks = [];
+
+        // Show modal and stream preview
+        const videoEl = $('#videoPreview')[0];
+        videoEl.srcObject = stream;
+
+        $('#videoRecordingModal').modal('show');
+
+        mediaRecorder.ondataavailable = e => {
+          if (e.data.size) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          clearInterval(voiceTimerInterval);
+          $('#videoRecordingTimer').text('00:00');
+          voiceSeconds = 0;
+
+          const blob = new Blob(recordedChunks, { type: 'video/webm' });
+          attachBlobToFileInput(blob, 'record-video.webm');
+
+          // Stop webcam stream tracks
+          stream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+        startVoiceTimer(); // Reuse voice timer for display
+      }).catch(err => alert('Camera access denied'));
+    }
+
+    function startVideoTimer() {
+      videoTimerInterval = setInterval(() => {
+        videoSeconds++;
+        const mins = String(Math.floor(videoSeconds / 60)).padStart(2, '0');
+        const secs = String(videoSeconds % 60).padStart(2, '0');
+        $('#videoRecordingTimer').text(`${mins}:${secs}`);
+      }, 1000);
+    }
+
+    function resetVideoTimer() {
+      clearInterval(videoTimerInterval);
+      $('#videoRecordingTimer').text('00:00');
+      videoSeconds = 0;
+    }
+
+    $('#stopVideoRecordingBtn').on('click', () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        $('#videoRecordingModal').modal('hide');
+      }
+    });
+
+    let useFrontCamera = true;
+    let currentStream;
+
+    function startVideoRecording() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        alert('Media recording not supported on this browser.');
+        return;
+      }
+
+      const constraints = {
+        video: { facingMode: useFrontCamera ? 'user' : 'environment' },
+        audio: true
+      };
+
+      navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+        currentStream = stream;
+        mediaRecorder = new MediaRecorder(stream);
+        recordedChunks = [];
+
+        const videoEl = $('#videoPreview')[0];
+        videoEl.srcObject = stream;
+
+        $('#videoRecordingModal').modal('show');
+
+        mediaRecorder.ondataavailable = e => {
+          if (e.data.size) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          resetVideoTimer();
+
+          const blob = new Blob(recordedChunks, { type: 'video/webm' });
+          attachBlobToFileInput(blob, 'record-video.webm');
+
+          // Stop the camera
+          currentStream.getTracks().forEach(track => track.stop());
+        };
+
+        mediaRecorder.start();
+        startVideoTimer();
+      }).catch(err => alert('Camera access denied'));
+    }
+
+    $('#stopVideoRecordingBtn').on('click', () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        $('#videoRecordingModal').modal('hide');
+      }
+    });
+
+    $('#switchCameraBtn').on('click', () => {
+      useFrontCamera = !useFrontCamera;
+      // Stop existing stream before restarting
+      if (currentStream) currentStream.getTracks().forEach(track => track.stop());
+      startVideoRecording(); // Restart with new camera
+    });
+
+    function sendLinkMessage(url) {
+      // Send as simple text or with a preview
+      var url_ = `<a href="${url}" target="_blank">${truncateName(url,20)}</a>`;
+      sendTextMessage(url);
+    }
+
+    function attachBlobToFileInput(blob, filename) {
+      const file = new File([blob], filename, { type: blob.type });
+
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+
+      const $fileInput = $('#chat-file')[0];
+      $fileInput.files = dataTransfer.files;
+
+      $($fileInput).trigger('change');
+      // Show media input group
+      $('#media-input-group').removeClass('d-none');
+      $('#text-input-group').addClass('d-none');
+    }
+
+    function sendTextMessage(msg){
+      $('#chat-message').val(msg);
+    }
+
+
+    let selectedLatLng = null;
+    let map, marker;
+
+    function initMapModal() {
+      $('#locationModal').modal('show');
+      setTimeout(() => {
+        if (!map) {
+          map = L.map('map').setView([20.5937, 78.9629], 5); // India default
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+          marker = L.marker([20.5937, 78.9629], { draggable: true }).addTo(map);
+
+          map.on('click', function (e) {
+            selectedLatLng = e.latlng;
+            marker.setLatLng(selectedLatLng);
+          });
+        } else {
+          map.invalidateSize();
+        }
+      }, 300);
+    }
+
+    function geocodeLocation(query) {
+        if (!query) return;
+
+        const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`;
+
+        fetch(url)
+          .then(res => res.json())
+          .then(data => {
+            if (data && data.length > 0) {
+              const result = data[0];
+              const latlng = { lat: parseFloat(result.lat), lng: parseFloat(result.lon) };
+              selectedLatLng = latlng;
+              marker.setLatLng(latlng);
+              map.setView(latlng, 14);
+            } else {
+              alert('No location found.');
+            }
+          })
+          .catch(() => alert('Location search failed.'));
+    }
+
+
+    $('#btnCurrentLocation').click(() => {
+      navigator.geolocation.getCurrentPosition(pos => {
+        const { latitude, longitude } = pos.coords;
+        selectedLatLng = { lat: latitude, lng: longitude };
+        marker.setLatLng(selectedLatLng);
+        map.setView(selectedLatLng, 15);
+      }, () => alert('Unable to get current location'));
+    });
+
+    $('#btnSearchLocation').click(() => {
+      const query = $('#location-search').val().trim();
+      geocodeLocation(query);
+    });
+
+    $('#btnSendLocation').click(() => {
+      if (!selectedLatLng) {
+        alert('Select a location first.');
+        return;
+      }
+
+      const { lat, lng } = selectedLatLng;
+      const gmapUrl = `https://maps.google.com/?q=${lat},${lng}`;
+      const message = JSON.stringify({
+        type: 'location',
+        lat,
+        lng,
+        url: gmapUrl,
+        name: truncateName(gmapUrl, 25),
+        messageId: Date.now()
+      });
+
+      if (dataChannel && dataChannel.readyState === 'open') {
+        dataChannel.send(message);
+        displayMessage('Me', message, true, 'location', null, message.messageId, 'sent');
+      }
+      $('#locationModal').modal('hide');
+    });
+
+    $('#saveGeminiKeyBtn').click(() => {
+      const key = $('#geminiApiKey').val().trim();
+      if (!key) return alert("Please enter an API key");
+      localStorage.setItem("gemini_api_key", key);
+      $('#settingAi').modal('hide');
+      showAlert("Gemini API key saved successfully", false);
+    });
+
+   $('#ai-btn').click(() => {
+      if (typeof window.autoCheckInterval !== 'undefined') {
+        clearInterval(window.autoCheckInterval);
+      }
+      $('#ai-btn').addClass('d-none');
+      $('#login-section').addClass('d-none');
+      $('#reloadBtn').addClass('d-none');
+      $('#chat-section').removeClass('d-none');
+      $('#headerBtnName').html('<i class="fas fa-robot"></i> Jarvis');
+      $('#btn-toggle').addClass('d-none');
+      $('#chat-message').val('');
+      $('#settingBtn').attr('data-bs-target', '#settingAi');
+      $('#delete-all-btn').wrap('<div class="d-flex align-items-center"></div>');
+      $('<button id="backBtn" class="btn btn-link text-white fs-6 p-0 text-decoration-none fw-bold border-0 me-2"><i class="fas fa-arrow-left"></i></button>')
+        .insertBefore('#delete-all-btn')
+        .click(() => {
+          location.reload();
+        });
+      $('#delete-all-btn').removeAttr('id');
+      $('#btn-send-text').off('click').on('click', async () => {
+        const msg = $('#chat-message').val().trim();
+        if (!msg) return;
+
+        displayMessage("You", msg, true, 'text', null, Date.now().toString(), 'sent');
+        $('#chat-message').val('');
+
+        const reply = await getGeminiReply(msg);
+        displayMessage("Jarvis", reply, false, 'text', null, Date.now().toString(), 'delivered');
+      });
+
+      // Open AI Settings if no API key
+      const apiKey = localStorage.getItem("gemini_api_key");
+      if (!apiKey) {
+        const aiModal = new bootstrap.Modal(document.getElementById('settingAi'));
+        aiModal.show();
+      }
+    });
+
+    async function getGeminiReply(userMessage) {
+      const apiKey = localStorage.getItem("gemini_api_key");
+      if (!apiKey) return "Please set the API key in settings";
+
+      try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: `Reply like a friendly human:\n${userMessage}` }] }]
+          })
+        });
+
+        const data = await response.json();
+        return data?.candidates?.[0]?.content?.parts?.[0]?.text || "🤖 Sorry, I don't understand.";
+      } catch (e) {
+        console.error("Gemini error:", e);
+        return "🤖 Error connecting to Gemini.";
+      }
+    }
+});
+function loadApiKey() {
+  const apiKey = localStorage.getItem("gemini_api_key") || "";
+  $('#geminiApiKey').val(apiKey);
+}

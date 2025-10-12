@@ -1,1 +1,178 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>FAQ - WaveLite Chat</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet"><link rel="stylesheet" href="style.css"><style> html, body { height: 100%; margin: 0; padding: 0; scroll-behavior: smooth; background-color: var(--wl-bg, #1a2b2e); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; } body { display: flex; flex-direction: column; } header { flex-shrink: 0; } main { flex-grow: 1; overflow-y: auto; padding-top: 80px; /* for fixed header offset */ padding-bottom: 40px; } h2 { font-weight: 600; color: var(--wl-mint); } .accordion-button { font-size: 1.05rem; } .accordion-body { font-size: 1rem; } .accordion-item { border: none; margin-bottom: 10px; border-radius: 12px; overflow: hidden; } .accordion-item, .accordion-body { background: transparent; color: var(--wl-mint); } .accordion-button { background: rgba(8,15,16,0.55); color: var(--wl-mint); border-bottom: 1px solid rgba(224,247,250,0.12); } .accordion-button:not(.collapsed) { background-color: var(--wl-bg); color: var(--wl-mint); box-shadow: none; } .accordion-button:focus { box-shadow: 0 0 0 6px rgba(212,225,87,0.12); } @media (max-width: 768px) { h2 { font-size: 1.5rem; } .accordion-button { font-size: 1rem; } .accordion-body { font-size: 0.95rem; } } </style></head><body><header class="header custom-bg py-3 d-flex justify-content-start align-items-center px-3 fixed-top"><button onclick="window.location.href='index.html'" class="btn btn-link fs-6 p-0 text-decoration-none fw-bold border-0 me-2 custom-fg"><i class="fa-solid fa-angle-left"></i></button><span class="fw-bold fs-6 d-flex align-items-center custom-fg"><i class="fa-solid fa-question-circle me-2"></i> FAQ</span></header><main class="container"><h2 class="wl-title mb-4 text-center">Frequently Asked Questions</h2><div class="accordion wl-tech-card p-2" id="faqAccordion"><div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1"> Who created WaveLite Chat? </button></h2><div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion"><div class="accordion-body"> WaveLite Chat was created by <strong>Chandan Maurya</strong>, a software developer based in Bengaluru. </div></div></div><div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2"> Do I need to create an account to use it? </button></h2><div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion"><div class="accordion-body"> No. WaveLite does not require login or registration. Just enter a Peer ID and connect. </div></div></div><div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3"> Is my chat data stored anywhere? </button></h2><div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion"><div class="accordion-body"> No. All communication happens directly between browsers using WebRTC. There is no server storing your chat or files. </div></div></div><div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4"> What file types are supported? </button></h2><div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion"><div class="accordion-body"> You can send images, videos, audio, documents, and even recorded media. </div></div></div><div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5"> Can I use WaveLite on mobile devices? </button></h2><div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion"><div class="accordion-body"> Yes, WaveLite is fully responsive and works great on mobile browsers. </div></div></div><div class="accordion-item"><h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6"> What is the Gemini AI feature? </button></h2><div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordion"><div class="accordion-body"> The Gemini AI is an optional chatbot built into WaveLite. You can switch to AI mode and chat with it like a virtual assistant. </div></div></div></div></main><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script></body></html><!-- Footer (commented out as requested)<footer class="footer"><div class="container"><div class="row"><div class="col-md-6"><p class="mb-1">© 2025 WaveLite Chat. All rights reserved.</p></div><div class="col-md-6 text-md-end"><a href="index.html" class="me-3">Home</a><a href="about.html" class="me-3">About</a><a href="faq.html">FAQ</a></div></div></div></footer>-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAQ - WaveLite Chat</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      scroll-behavior: smooth;
+      background-color: var(--wl-bg, #1a2b2e);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      flex-shrink: 0;
+    }
+
+    main {
+      flex-grow: 1;
+      overflow-y: auto;
+      padding-top: 80px; /* for fixed header offset */
+      padding-bottom: 40px;
+    }
+
+    h2 {
+      font-weight: 600;
+      color: var(--wl-mint);
+    }
+
+    .accordion-button {
+      font-size: 1.05rem;
+    }
+
+    .accordion-body { font-size: 1rem; }
+
+    .accordion-item { border: none; margin-bottom: 10px; border-radius: 12px; overflow: hidden; }
+    .accordion-item, .accordion-body { background: transparent; color: var(--wl-mint); }
+    .accordion-button { background: rgba(8,15,16,0.55); color: var(--wl-mint); border-bottom: 1px solid rgba(224,247,250,0.12); }
+    .accordion-button:not(.collapsed) { background-color: var(--wl-bg); color: var(--wl-mint); box-shadow: none; }
+    .accordion-button:focus { box-shadow: 0 0 0 6px rgba(212,225,87,0.12); }
+
+    @media (max-width: 768px) {
+      h2 {
+        font-size: 1.5rem;
+      }
+
+      .accordion-button {
+        font-size: 1rem;
+      }
+
+      .accordion-body {
+        font-size: 0.95rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="header custom-bg py-3 d-flex justify-content-start align-items-center px-3 fixed-top">
+    <button onclick="window.location.href='index.html'" class="btn btn-link fs-6 p-0 text-decoration-none fw-bold border-0 me-2 custom-fg">
+      <i class="fa-solid fa-angle-left"></i>
+    </button>
+    <span class="fw-bold fs-6 d-flex align-items-center custom-fg"><i class="fa-solid fa-question-circle me-2"></i> FAQ</span>
+  </header>
+
+  <main class="container">
+    <h2 class="wl-title mb-4 text-center">Frequently Asked Questions</h2>
+    <div class="accordion wl-tech-card p-2" id="faqAccordion">
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#faq1">
+            Who created WaveLite Chat?
+          </button>
+        </h2>
+        <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+          <div class="accordion-body">
+            WaveLite Chat was created by <strong>Chandan Maurya</strong>, a software developer based in Bengaluru.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
+            Do I need to create an account to use it?
+          </button>
+        </h2>
+        <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+          <div class="accordion-body">
+            No. WaveLite does not require login or registration. Just enter a Peer ID and connect.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
+            Is my chat data stored anywhere?
+          </button>
+        </h2>
+        <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+          <div class="accordion-body">
+            No. All communication happens directly between browsers using WebRTC. There is no server storing your chat or files.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
+            What file types are supported?
+          </button>
+        </h2>
+        <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+          <div class="accordion-body">
+            You can send images, videos, audio, documents, and even recorded media.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+            Can I use WaveLite on mobile devices?
+          </button>
+        </h2>
+        <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+          <div class="accordion-body">
+            Yes, WaveLite is fully responsive and works great on mobile browsers.
+          </div>
+        </div>
+      </div>
+
+      <div class="accordion-item">
+        <h2 class="accordion-header">
+          <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq6">
+            What is the Gemini AI feature?
+          </button>
+        </h2>
+        <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+          <div class="accordion-body">
+            The Gemini AI is an optional chatbot built into WaveLite. You can switch to AI mode and chat with it like a virtual assistant.
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
+<!-- Footer (commented out as requested)
+<footer class="footer">
+  <div class="container">
+    <div class="row">
+      <div class="col-md-6">
+        <p class="mb-1">© 2025 WaveLite Chat. All rights reserved.</p>
+      </div>
+      <div class="col-md-6 text-md-end">
+        <a href="index.html" class="me-3">Home</a>
+        <a href="about.html" class="me-3">About</a>
+        <a href="faq.html">FAQ</a>
+      </div>
+    </div>
+  </div>
+</footer>
+-->

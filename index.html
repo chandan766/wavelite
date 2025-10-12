@@ -1,1 +1,433 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" /><!-- ✅ Optimized Title for SEO --><title>WaveLite Chat - Peer-to-Peer WebRTC Chat & File Sharing App</title><!-- ✅ SEO Meta Description --><meta name="description" content="WaveLite Chat is a secure, peer-to-peer chat app using WebRTC. Send text and files (images, video, audio) directly between browsers without a server. Try it free now!" /><!-- ✅ Open Graph Meta for Social Sharing --><meta property="og:title" content="WaveLite Chat - P2P Chat App with WebRTC" /><meta property="og:description" content="WaveLite Chat lets you chat and share files securely using WebRTC. No servers, no data stored. 100% browser-based and free." /><meta name="keywords" content="WaveLite, WebRTC chat, peer to peer messaging, secure chat app, private chat, private file sharing, no server chat, without server messaging, serverless chat app, video chat, audio chat, browser-based messenger, WebRTC file transfer, encrypted messaging, P2P chat app, free online chat tool, real-time communication app, anonymous chat app"><meta property="og:url" content="https://wavelite.pages.dev/" /><meta property="og:type" content="website" /><!-- ✅ Twitter Card Meta --><meta name="twitter:card" content="summary" /><meta name="twitter:title" content="WaveLite Chat - Secure P2P WebRTC Chat App" /><meta name="twitter:description" content="WaveLite Chat is a real-time chat app using WebRTC. Chat peer-to-peer, no servers or accounts needed." /><!-- ✅ Canonical URL for Indexing --><link rel="canonical" href="https://wavelite.pages.dev/" /><link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" /><!-- ✅ Favicon (Optional but Good for Branding) --><link rel="icon" href="assets/img/favicon.ico" type="image/x-icon" /><!-- Bootstrap CSS --><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><!-- Font Awesome Icons --><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet"><!-- Plyr CSS --><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css" /><!-- Custom CSS --><link rel="stylesheet" href="style.css"><!-- Leaflet.js (for map) --><link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script></head><body><header class="header custom-bg py-3 text-white d-flex justify-content-between align-items-center px-3"><!-- Left Section --><button id="delete-all-btn" class="btn btn-link text-white fs-6 p-0 text-decoration-none fw-bold border-0 text-start"><span id="headerBtnName" class="custom-fg"><i class="fa-solid fa-message"></i> Wave Lite</span><div id="status" class="custom-fg small" style="font-size: 0.7rem;"></div></button><!-- Right Section: Settings + Dropdown --><div class="d-flex align-items-center gap-3"><!-- Settings Button --><button class="btn btn-link text-white fs-5 p-0 custom-fg" id="settingBtn" data-bs-toggle="modal" data-bs-target="#savePeerModal" title="Watch a Peer ID"><i class="fas fa-cog"></i></button><!-- Dropdown Menu --><div class="dropdown"><button class="btn btn-link text-white fs-5 p-0 custom-fg" id="infoDropdown" data-bs-toggle="dropdown" aria-expanded="false"><i class="fas fa-ellipsis-v"></i></button><ul class="dropdown-menu dropdown-menu-end"><li><a class="dropdown-item" href="#" id="reloadBtn"><i class="fas fa-rotate me-2"></i>Refresh </a></li><li><a class="dropdown-item" href="usermanual.html"><i class="fas fa-book me-2"></i>User Manual </a></li><li><a class="dropdown-item" href="feedback.html"><i class="fas fa-comment-dots me-2"></i>Feedback </a></li><li><a class="dropdown-item" href="faq.html"><i class="fas fa-question-circle me-2"></i>FAQ </a></li><li><a class="dropdown-item" href="about.html"><i class="fas fa-info-circle me-2"></i>About </a></li></ul></div></div></header><!-- Peer ID Login Card --><main class="container d-flex justify-content-center align-items-center vh-100" id="login-section"><div class="card wl-tech-card shadow p-4 w-100" style="max-width: 400px;"><h5 class="wl-title mb-3">Connect to WaveLite Chat</h5><form id="peerForm"><div class="mb-3"><label for="chat-username" class="form-label"><i class="fas fa-user me-1" style="color: var(--wl-neon) !important;"></i> Your Name </label><input type="text" id="chat-username" class="form-control wl-input" maxlength="20" placeholder="Enter your name [default: Anonymous]"><span id="name-error" class="text-danger small"></span></div><div class="mb-3"><label for="peer-id" class="form-label"><i class="fas fa-id-badge me-1 text-secondary" style="color: var(--wl-neon) !important;"></i> Peer ID </label><input type="text" id="peer-id" class="form-control wl-input" maxlength="100" placeholder="Enter Peer ID [default: peer123]"><span id="peer-error" class="text-danger small"></span></div><div id="peerBtnGroup" class="d-flex justify-content-between"><button type="submit" id="peerIdSubmit" class="btn btn-sm wl-btn w-50"><i class="fa-solid fa-plug"></i> Connect</button><button type="button" id="joinPeer" class="btn btn-sm wl-btn wl-btn-ghost ms-4 w-50"><i class="fa-solid fa-right-to-bracket"></i> Join</button></div></form><!-- Connection Status Panel (initially hidden)--><div id="connectionStatusPanel" class="mt-2 d-none"><div class="alert p-3 rounded-3 shadow-sm mb-0"><div class="d-flex align-items-center mb-2"><div class="spinner-border me-3" role="status" style="width: 1.2rem; height: 1.2rem;"></div><strong id="connectionStatusText">Initializing connection...</strong></div><div class="progress wl-progress"><div id="connectionProgressBar" class="progress-bar" role="progressbar" style="width: 10%;"></div></div></div></div></div></main><!-- Chat section --><div id="chat-section" class="d-none"><div id="chat-display" class="d-flex flex-column pt-4"></div><div class="chat-input-section"><!-- Text Message Input Group --><div id="text-input-group" class="d-flex align-items-center gap-2"><button id="btn-toggle" class="btn btn-outline-secondary"><i class="fas fa-paperclip"></i></button><input type="text" id="chat-message" maxlength="1000" class="form-control" placeholder="Start typing..."><button id="btn-send-text" class="btn custom-bg text-white"><i class="fas fa-paper-plane"></i></button></div><!-- Media File Input Group (Initially Hidden) --><div id="media-input-group" class="d-flex align-items-center gap-2 d-none"><button id="btn-toggle-back" class="btn btn-outline-secondary"><i class="fas fa-times"></i></button><div class="d-flex align-items-center gap-2" style="width: 70%;"><input type="file" id="chat-file" class="visually-hidden"><button type="button" id="btn-choose-file" class="btn btn-outline-secondary"><i class="fas fa-folder-open me-1"></i></button><div id="selected-file-name" class="flex-grow-1 text-truncate small text-white" style="max-width: 100%;"> No file selected </div><button type="button" id="clear-file" class="btn btn-outline-danger d-none" title="Clear file"><i class="fas fa-times"></i></button></div><button id="btn-send-media" class="btn custom-bg text-white"><i class="fas fa-paper-plane"></i></button></div></div><div id="attachment-menu" class="attachment-menu d-none mx-2"><div class="attachment-grid"><button class="attachment-btn" data-type="image"><i class="fas fa-image text-primary"></i><small>Image</small></button><button class="attachment-btn" data-type="video"><i class="fas fa-file-video" style="color:purple;"></i><small>Video</small></button><button class="attachment-btn" data-type="camera"><i class="fas fa-camera" style="color:tomato;"></i><small>Camera</small></button><button class="attachment-btn" data-type="audio"><i class="fas fa-headphones" style="color:orangered;"></i><small>Audio</small></button><button class="attachment-btn" data-type="file"><i class="fas fa-file text-warning"></i><small>File</small></button><button class="attachment-btn" data-type="record-voice"><i class="fas fa-microphone text-danger"></i><small>Record</small></button><button class="attachment-btn" data-type="doc"><i class="fas fa-file-alt text-info"></i><small>Document</small></button><button class="attachment-btn" data-type="location"><i class="fas fa-location-dot" style="color:#23aaf2;"></i><small>Location</small></button><button class="attachment-btn" data-type="record-video"><i class="fas fa-video text-danger"></i><small>Record</small></button></div></div></div><!-- Save Peer ID Modal --><div class="modal fade" id="savePeerModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title"><i class="fas fa-cog"></i> Settings</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><label class="form-label mt-3 custom-bg text-white p-2 w-100 mb-2"><i class="fas fa-address-card"></i> Profile </label><div class="d-flex align-items-center mb-2 ps-2 text-white custom-bg"><i class="fas fa-user me-2 fs-5 px-1"></i><input type="text" id="peerNameToSave" maxlength="20" class="form-control rounded-0" placeholder="Enter Your Name"></div><div class="d-flex align-items-center mb-2 ps-2 text-white custom-bg"><i class="fas fa-id-badge me-2 fs-5 px-1"></i><input type="text" id="peerIdToSave" maxlength="100" class="form-control rounded-0" placeholder="Enter Peer Id (default: peer123)"></div><div id="save-peer-alert" class="mt-2 text-danger small d-none">Notification permission denied. Required for join alerts.</div><!-- STUN Section Header with Collapse Toggle --><div class="d-flex justify-content-between align-items-center mt-3 custom-bg text-white p-2 w-100 mb-2"><label class="form-label m-0 custom-fg"><i class="fas fa-server"></i> Select STUN Servers <span class="text-warning" id="stunSaveStatus"></span></label><button class="btn btn-sm btn-outline-light d-flex align-items-center gap-1" type="button" data-bs-toggle="collapse" data-bs-target="#stunServerCollapse" aria-expanded="false" aria-controls="stunServerCollapse" id="toggleStunBtn"><i id="stunToggleIcon" class="fas fa-chevron-down"></i></button></div><!-- Collapsible STUN server checkboxes --><div id="stunServerCollapse" class="collapse"><div id="stunServerCheckboxes" class="form-check-group"><div class="form-check"><input class="form-check-input stun-option" type="checkbox" value="stun:global.stun.twilio.com:3478" id="stun1"><label class="form-check-label" for="stun1">stun:global.stun.twilio.com:3478 (fast)</label></div><div class="form-check"><input class="form-check-input stun-option" type="checkbox" value="stun:stun.l.google.com:19302" id="stun2"><label class="form-check-label" for="stun2">stun.l.google.com:19302</label></div><div class="form-check"><input class="form-check-input stun-option" type="checkbox" value="stun:stun1.l.google.com:19302" id="stun3"><label class="form-check-label" for="stun3">stun1.l.google.com:19302</label></div><div class="form-check"><input class="form-check-input stun-option" type="checkbox" value="stun:stun2.l.google.com:19302" id="stun4"><label class="form-check-label" for="stun4">stun2.l.google.com:19302</label></div><div class="form-check"><input class="form-check-input stun-option" type="checkbox" value="stun:stun3.l.google.com:19302" id="stun5"><label class="form-check-label" for="stun5">stun3.l.google.com:19302</label></div><div class="form-check"><input class="form-check-input stun-option" type="checkbox" value="stun:stun4.l.google.com:19302" id="stun6"><label class="form-check-label" for="stun6">stun4.l.google.com:19302</label></div><div class="form-check"><input class="form-check-input stun-option" type="checkbox" value="stun:stun.stunprotocol.org:3478" id="stun7"><label class="form-check-label" for="stun7">stun.stunprotocol.org:3478</label></div></div></div><!-- STUN error message (keep outside collapse) --><div id="stun-error" class="mt-2 text-danger small d-none">Please select at least 1 STUN server.</div></div><div class="modal-footer"><button class="btn btn-sm btn-secondary w-25" data-bs-dismiss="modal">Cancel</button><button class="btn btn-sm text-white custom-bg w-25 ms-4" id="confirmSavePeerBtn">Save</button></div></div></div></div><!-- Ai setting --><div class="modal fade" id="settingAi" tabindex="-1" aria-labelledby="settingAiLabel" aria-hidden="true"><div class="modal-dialog modal-dialog-centered modal-sm"><div class="modal-content border-0"><div class="modal-header custom-bg text-white"><h5 class="modal-title" id="settingAiLabel"><i class="fas fa-brain me-2"></i>Jarvis Settings</h5><button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body p-3"><div class="mb-3"><label for="geminiApiKey" class="form-label fw-semibold">Gemini API Key</label><input type="text" class="form-control" id="geminiApiKey" placeholder="Paste your API key here"></div><button id="saveGeminiKeyBtn" class="btn custom-bg text-white w-100"><i class="fas fa-save me-1"></i> Save Key </button></div></div></div></div><!-- Voice Recording Modal --><div id="voiceRecordingModal" class="modal fade" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content bg-dark text-white text-center"><div class="modal-header border-0"><h5 class="modal-title w-100"><i class="fas fa-microphone-alt"></i> Recording Voice</h5></div><div class="modal-body"><div class="fs-1 fw-bold" id="voiceRecordingTimer">00:00</div><p class="small text-muted">Tap stop to finish</p></div><div class="modal-footer border-0 justify-content-center"><button type="button" class="btn btn-danger" id="stopVoiceRecordingBtn"><i class="fas fa-stop"></i> Stop </button></div></div></div></div><!-- Video Recording Modal --><div id="videoRecordingModal" class="modal fade" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content bg-dark text-white text-center"><div class="modal-header border-0"><h5 class="modal-title w-100"><i class="fas fa-video"></i> Recording Video</h5></div><div class="modal-body"><video id="videoPreview" autoplay muted playsinline style="max-width: 100%; border-radius: 10px;"></video><div class="fs-5 mt-2" id="videoRecordingTimer">00:00</div></div><div class="modal-footer border-0 justify-content-center"><button type="button" class="btn btn-danger" id="stopVideoRecordingBtn"><i class="fas fa-stop"></i> Stop </button><button type="button" class="btn btn-secondary me-2" id="switchCameraBtn"><i class="fas fa-sync-alt"></i> Switch Camera </button></div></div></div></div><!-- Location Sharing Modal --><div id="locationModal" class="modal fade" tabindex="-1"><div class="modal-dialog modal-dialog-centered modal-lg"><div class="modal-content"><div class="modal-header custom-bg text-white"><h5 class="modal-title"><i class="fas fa-location-dot me-2"></i> Share Location</h5><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body p-2"><div class="input-group mb-2"><input type="text" id="location-search" class="form-control" placeholder="Search a location..."><button class="btn btn-outline-secondary" type="button" id="btnSearchLocation"><i class="fas fa-search"></i></button></div><div id="map" style="height: 300px; border-radius: 10px;"></div><div class="d-flex justify-content-end mt-3 gap-2"><button class="btn btn-outline-secondary" id="btnCurrentLocation"><i class="fas fa-crosshairs"></i> Current</button><button class="btn btn-primary" id="btnSendLocation"><i class="fas fa-paper-plane"></i> Send</button></div></div></div></div></div><!-- Auto Join Prompt Modal --><div class="modal fade" id="autoJoinModal" tabindex="-1"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Incoming Connection Request</h5></div><div class="modal-body"><p id="autoJoinMessage" class="mb-0"></p></div><div class="modal-footer"><button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button><button class="btn btn-sm custom-bg text-white" id="autoJoinConfirmBtn">Join</button></div></div></div></div><!-- Image Preview Modal --><div id="imagePreviewModal" class="image-preview-modal d-none"><div class="image-preview-container"><div class="image-preview-filename" id="imagePreviewFilename"></div><button class="image-preview-close" id="imagePreviewClose"><i class="fas fa-times"></i></button><img id="imagePreviewImg" class="image-preview-img" alt="Preview"><div class="image-preview-download mt-3"><button id="imagePreviewDownload" class="btn btn-outline-light btn-sm"><i class="fas fa-download me-2"></i>Download Image </button></div></div></div><button id="ai-btn" class="btn btn-primary rounded-circle position-fixed" style="bottom: 60px; right: 25px; z-index: 1050;"><i class="fas fa-robot"></i></button><script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script><script src="https://unpkg.com/wavesurfer.js"></script><script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.polyfilled.min.js"></script><script src="script.js"></script><script src="main.js"></script><script> document.addEventListener('DOMContentLoaded', function () { var fileInput = document.getElementById('chat-file'); var chooseBtn = document.getElementById('btn-choose-file'); var clearBtn = document.getElementById('clear-file'); var fileName = document.getElementById('selected-file-name'); if (!fileInput || !chooseBtn || !fileName) return; chooseBtn.addEventListener('click', function () { fileInput.click(); }); fileInput.addEventListener('change', function () { if (fileInput.files && fileInput.files.length > 0) { fileName.textContent = fileInput.files[0].name; if (clearBtn) clearBtn.classList.remove('d-none'); } else { fileName.textContent = 'No file selected'; if (clearBtn) clearBtn.classList.add('d-none'); } }); if (clearBtn) { clearBtn.addEventListener('click', function () { fileInput.value = ''; fileInput.dispatchEvent(new Event('change')); }); } }); </script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+  <!-- ✅ Optimized Title for SEO -->
+  <title>WaveLite Chat - Peer-to-Peer WebRTC Chat & File Sharing App</title>
+  
+  <!-- ✅ SEO Meta Description -->
+  <meta name="description" content="WaveLite Chat is a secure, peer-to-peer chat app using WebRTC. Send text and files (images, video, audio) directly between browsers without a server. Try it free now!" />
+  
+  <!-- ✅ Open Graph Meta for Social Sharing -->
+  <meta property="og:title" content="WaveLite Chat - P2P Chat App with WebRTC" />
+  <meta property="og:description" content="WaveLite Chat lets you chat and share files securely using WebRTC. No servers, no data stored. 100% browser-based and free." />
+  <meta name="keywords" content="WaveLite, WebRTC chat, peer to peer messaging, secure chat app, private chat, private file sharing, no server chat, without server messaging, serverless chat app, video chat, audio chat, browser-based messenger, WebRTC file transfer, encrypted messaging, P2P chat app, free online chat tool, real-time communication app, anonymous chat app">
+  <meta property="og:url" content="https://wavelite.pages.dev/" />
+  <meta property="og:type" content="website" />
+  
+  <!-- ✅ Twitter Card Meta -->
+  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:title" content="WaveLite Chat - Secure P2P WebRTC Chat App" />
+  <meta name="twitter:description" content="WaveLite Chat is a real-time chat app using WebRTC. Chat peer-to-peer, no servers or accounts needed." />
+  
+  <!-- ✅ Canonical URL for Indexing -->
+  <link rel="canonical" href="https://wavelite.pages.dev/" />
+  <link rel="sitemap" type="application/xml" title="Sitemap" href="/sitemap.xml" />
+  
+  <!-- ✅ Favicon (Optional but Good for Branding) -->
+  <link rel="icon" href="assets/img/favicon.ico" type="image/x-icon" />
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Font Awesome Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet">
+  <!-- Plyr CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.css" />
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="style.css">
+
+  <!-- Leaflet.js (for map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+</head>
+
+<body>
+ <header class="header custom-bg py-3 text-white d-flex justify-content-between align-items-center px-3">
+  <!-- Left Section -->
+  <button id="delete-all-btn" class="btn btn-link text-white fs-6 p-0 text-decoration-none fw-bold border-0 text-start">
+    <span id="headerBtnName" class="custom-fg"><i class="fa-solid fa-message"></i> Wave Lite</span>
+    <div id="status" class="custom-fg small" style="font-size: 0.7rem;"></div>
+  </button>
+
+  <!-- Right Section: Settings + Dropdown -->
+  <div class="d-flex align-items-center gap-3">
+    <!-- Settings Button -->
+    <button class="btn btn-link text-white fs-5 p-0 custom-fg" id="settingBtn" data-bs-toggle="modal" data-bs-target="#savePeerModal" title="Watch a Peer ID">
+      <i class="fas fa-cog"></i>
+    </button>
+
+    <!-- Dropdown Menu -->
+    <div class="dropdown">
+      <button class="btn btn-link text-white fs-5 p-0 custom-fg" id="infoDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="fas fa-ellipsis-v"></i>
+      </button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li>
+          <a class="dropdown-item" href="#" id="reloadBtn">
+            <i class="fas fa-rotate me-2"></i>Refresh
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="usermanual.html">
+            <i class="fas fa-book me-2"></i>User Manual
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="feedback.html">
+            <i class="fas fa-comment-dots me-2"></i>Feedback
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="faq.html">
+            <i class="fas fa-question-circle me-2"></i>FAQ
+          </a>
+        </li>
+        <li>
+          <a class="dropdown-item" href="about.html">
+            <i class="fas fa-info-circle me-2"></i>About
+          </a>
+        </li>
+      </ul>
+    </div>
+  </div>
+</header>
+
+
+  <!-- Peer ID Login Card -->
+  <main class="container d-flex justify-content-center align-items-center vh-100" id="login-section">
+    <div class="card wl-tech-card shadow p-4 w-100" style="max-width: 400px;">
+      <h5 class="wl-title mb-3">Connect to WaveLite Chat</h5>
+      <form id="peerForm">
+        <div class="mb-3">
+          <label for="chat-username" class="form-label">
+            <i class="fas fa-user me-1" style="color: var(--wl-neon) !important;"></i> Your Name
+          </label>
+          <input type="text" id="chat-username" class="form-control wl-input" maxlength="20" placeholder="Enter your name [default: Anonymous]">
+          <span id="name-error" class="text-danger small"></span>
+        </div>
+        <div class="mb-3">
+          <label for="peer-id" class="form-label">
+            <i class="fas fa-id-badge me-1 text-secondary" style="color: var(--wl-neon) !important;"></i> Peer ID
+          </label>
+          <input type="text" id="peer-id" class="form-control wl-input" maxlength="100" placeholder="Enter Peer ID [default: peer123]">
+          <span id="peer-error" class="text-danger small"></span>
+        </div>
+        <div id="peerBtnGroup" class="d-flex justify-content-between">
+          <button type="submit" id="peerIdSubmit" class="btn btn-sm wl-btn w-50"><i class="fa-solid fa-plug"></i> Connect</button>
+          <button type="button" id="joinPeer" class="btn btn-sm wl-btn wl-btn-ghost ms-4 w-50"><i class="fa-solid fa-right-to-bracket"></i> Join</button>
+        </div>
+      </form>
+      <!--  Connection Status Panel (initially hidden)-->
+      <div id="connectionStatusPanel" class="mt-2 d-none">
+        <div class="alert p-3 rounded-3 shadow-sm mb-0">
+          <div class="d-flex align-items-center mb-2">
+            <div class="spinner-border me-3" role="status" style="width: 1.2rem; height: 1.2rem;"></div>
+            <strong id="connectionStatusText">Initializing connection...</strong>
+          </div>
+          <div class="progress wl-progress">
+            <div id="connectionProgressBar" class="progress-bar" role="progressbar" style="width: 10%;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Chat section -->
+  <div id="chat-section" class="d-none">
+    <div id="chat-display" class="d-flex flex-column pt-4"></div>
+    <div class="chat-input-section">
+      <!-- Text Message Input Group -->
+      <div id="text-input-group" class="d-flex align-items-center gap-2">
+        <button id="btn-toggle" class="btn btn-outline-secondary"><i class="fas fa-paperclip"></i></button>
+        <input type="text" id="chat-message" maxlength="1000" class="form-control" placeholder="Start typing...">
+        <button id="btn-send-text" class="btn custom-bg text-white"><i class="fas fa-paper-plane"></i></button>
+      </div>
+
+      <!-- Media File Input Group (Initially Hidden) -->
+      <div id="media-input-group" class="d-flex align-items-center gap-2 d-none">
+        <button id="btn-toggle-back" class="btn btn-outline-secondary"><i class="fas fa-times"></i></button>
+        <div class="d-flex align-items-center gap-2" style="width: 70%;">
+          <input type="file" id="chat-file" class="visually-hidden">
+          <button type="button" id="btn-choose-file" class="btn btn-outline-secondary">
+            <i class="fas fa-folder-open me-1"></i>
+          </button>
+          <div id="selected-file-name" class="flex-grow-1 text-truncate small text-white" style="max-width: 100%;">
+            No file selected
+          </div>
+          <button type="button" id="clear-file" class="btn btn-outline-danger d-none" title="Clear file">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <button id="btn-send-media" class="btn custom-bg text-white"><i class="fas fa-paper-plane"></i></button>
+      </div>
+    </div>
+    <div id="attachment-menu" class="attachment-menu d-none mx-2">
+      <div class="attachment-grid">
+        <button class="attachment-btn" data-type="image"><i class="fas fa-image text-primary"></i><small>Image</small></button>
+        <button class="attachment-btn" data-type="video"><i class="fas fa-file-video" style="color:purple;"></i><small>Video</small></button>
+        <button class="attachment-btn" data-type="camera"><i class="fas fa-camera" style="color:tomato;"></i><small>Camera</small></button>
+        <button class="attachment-btn" data-type="audio"><i class="fas fa-headphones" style="color:orangered;"></i><small>Audio</small></button>
+        <button class="attachment-btn" data-type="file"><i class="fas fa-file text-warning"></i><small>File</small></button>
+        <button class="attachment-btn" data-type="record-voice"><i class="fas fa-microphone text-danger"></i><small>Record</small></button>
+        <button class="attachment-btn" data-type="doc"><i class="fas fa-file-alt text-info"></i><small>Document</small></button>
+        <button class="attachment-btn" data-type="location"><i class="fas fa-location-dot" style="color:#23aaf2;"></i><small>Location</small></button>
+        <button class="attachment-btn" data-type="record-video"><i class="fas fa-video text-danger"></i><small>Record</small></button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Save Peer ID Modal -->
+<div class="modal fade" id="savePeerModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="fas fa-cog"></i> Settings</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label mt-3 custom-bg text-white p-2 w-100 mb-2"><i class="fas fa-address-card"></i> Profile </label>
+        <div class="d-flex align-items-center mb-2 ps-2 text-white custom-bg">
+          <i class="fas fa-user me-2 fs-5 px-1"></i>
+          <input type="text" id="peerNameToSave" maxlength="20" class="form-control rounded-0" placeholder="Enter Your Name">
+        </div>
+        <div class="d-flex align-items-center mb-2 ps-2 text-white custom-bg">
+          <i class="fas fa-id-badge me-2 fs-5 px-1"></i>
+          <input type="text" id="peerIdToSave" maxlength="100" class="form-control rounded-0" placeholder="Enter Peer Id (default: peer123)">
+        </div>
+        <div id="save-peer-alert" class="mt-2 text-danger small d-none">Notification permission denied. Required for join alerts.</div>
+        <!-- STUN Section Header with Collapse Toggle -->
+        <div class="d-flex justify-content-between align-items-center mt-3 custom-bg text-white p-2 w-100 mb-2">
+          <label class="form-label m-0 custom-fg">
+            <i class="fas fa-server"></i> Select STUN Servers 
+            <span class="text-warning" id="stunSaveStatus"></span>
+          </label>
+          <button class="btn btn-sm btn-outline-light d-flex align-items-center gap-1" type="button"
+            data-bs-toggle="collapse" data-bs-target="#stunServerCollapse"
+            aria-expanded="false" aria-controls="stunServerCollapse"
+            id="toggleStunBtn">
+            <i id="stunToggleIcon" class="fas fa-chevron-down"></i>
+          </button>
+
+        </div>
+
+        <!-- Collapsible STUN server checkboxes -->
+        <div id="stunServerCollapse" class="collapse">
+          <div id="stunServerCheckboxes" class="form-check-group">
+            <div class="form-check">
+              <input class="form-check-input stun-option" type="checkbox" value="stun:global.stun.twilio.com:3478" id="stun1">
+              <label class="form-check-label" for="stun1">stun:global.stun.twilio.com:3478 (fast)</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input stun-option" type="checkbox" value="stun:stun.l.google.com:19302" id="stun2">
+              <label class="form-check-label" for="stun2">stun.l.google.com:19302</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input stun-option" type="checkbox" value="stun:stun1.l.google.com:19302" id="stun3">
+              <label class="form-check-label" for="stun3">stun1.l.google.com:19302</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input stun-option" type="checkbox" value="stun:stun2.l.google.com:19302" id="stun4">
+              <label class="form-check-label" for="stun4">stun2.l.google.com:19302</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input stun-option" type="checkbox" value="stun:stun3.l.google.com:19302" id="stun5">
+              <label class="form-check-label" for="stun5">stun3.l.google.com:19302</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input stun-option" type="checkbox" value="stun:stun4.l.google.com:19302" id="stun6">
+              <label class="form-check-label" for="stun6">stun4.l.google.com:19302</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input stun-option" type="checkbox" value="stun:stun.stunprotocol.org:3478" id="stun7">
+              <label class="form-check-label" for="stun7">stun.stunprotocol.org:3478</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- STUN error message (keep outside collapse) -->
+        <div id="stun-error" class="mt-2 text-danger small d-none">Please select at least 1 STUN server.</div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-secondary w-25" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm text-white custom-bg w-25 ms-4" id="confirmSavePeerBtn">Save</button>
+      </div>
+    </div>
+  </div>
+  
+</div>
+
+<!-- Ai setting -->
+<div class="modal fade" id="settingAi" tabindex="-1" aria-labelledby="settingAiLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0">
+      <div class="modal-header custom-bg text-white">
+        <h5 class="modal-title" id="settingAiLabel"><i class="fas fa-brain me-2"></i>Jarvis Settings</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-3">
+        <div class="mb-3">
+          <label for="geminiApiKey" class="form-label fw-semibold">Gemini API Key</label>
+          <input type="text" class="form-control" id="geminiApiKey" placeholder="Paste your API key here">
+        </div>
+        <button id="saveGeminiKeyBtn" class="btn custom-bg text-white w-100">
+          <i class="fas fa-save me-1"></i> Save Key
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- Voice Recording Modal -->
+<div id="voiceRecordingModal" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content bg-dark text-white text-center">
+      <div class="modal-header border-0">
+        <h5 class="modal-title w-100"><i class="fas fa-microphone-alt"></i> Recording Voice</h5>
+      </div>
+      <div class="modal-body">
+        <div class="fs-1 fw-bold" id="voiceRecordingTimer">00:00</div>
+        <p class="small text-muted">Tap stop to finish</p>
+      </div>
+      <div class="modal-footer border-0 justify-content-center">
+        <button type="button" class="btn btn-danger" id="stopVoiceRecordingBtn">
+          <i class="fas fa-stop"></i> Stop
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Video Recording Modal -->
+<div id="videoRecordingModal" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content bg-dark text-white text-center">
+      <div class="modal-header border-0">
+        <h5 class="modal-title w-100"><i class="fas fa-video"></i> Recording Video</h5>
+      </div>
+      <div class="modal-body">
+        <video id="videoPreview" autoplay muted playsinline style="max-width: 100%; border-radius: 10px;"></video>
+        <div class="fs-5 mt-2" id="videoRecordingTimer">00:00</div>
+      </div>
+      <div class="modal-footer border-0 justify-content-center">
+        <button type="button" class="btn btn-danger" id="stopVideoRecordingBtn">
+          <i class="fas fa-stop"></i> Stop
+        </button>
+        <button type="button" class="btn btn-secondary me-2" id="switchCameraBtn">
+          <i class="fas fa-sync-alt"></i> Switch Camera
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Location Sharing Modal -->
+<div id="locationModal" class="modal fade" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header custom-bg text-white">
+        <h5 class="modal-title"><i class="fas fa-location-dot me-2"></i> Share Location</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-2">
+        <div class="input-group mb-2">
+          <input type="text" id="location-search" class="form-control" placeholder="Search a location...">
+          <button class="btn btn-outline-secondary" type="button" id="btnSearchLocation">
+            <i class="fas fa-search"></i>
+          </button>
+        </div>
+        <div id="map" style="height: 300px; border-radius: 10px;"></div>
+        <div class="d-flex justify-content-end mt-3 gap-2">
+          <button class="btn btn-outline-secondary" id="btnCurrentLocation"><i class="fas fa-crosshairs"></i> Current</button>
+          <button class="btn btn-primary" id="btnSendLocation"><i class="fas fa-paper-plane"></i> Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Auto Join Prompt Modal -->
+<div class="modal fade" id="autoJoinModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Incoming Connection Request</h5>
+      </div>
+      <div class="modal-body">
+        <p id="autoJoinMessage" class="mb-0"></p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-sm custom-bg text-white" id="autoJoinConfirmBtn">Join</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Image Preview Modal -->
+<div id="imagePreviewModal" class="image-preview-modal d-none">
+  <div class="image-preview-container">
+    <div class="image-preview-filename" id="imagePreviewFilename"></div>
+    <button class="image-preview-close" id="imagePreviewClose">
+      <i class="fas fa-times"></i>
+    </button>
+    <img id="imagePreviewImg" class="image-preview-img" alt="Preview">
+    <div class="image-preview-download mt-3">
+      <button id="imagePreviewDownload" class="btn btn-outline-light btn-sm">
+        <i class="fas fa-download me-2"></i>Download Image
+      </button>
+    </div>
+  </div>
+</div>
+
+
+
+<button id="ai-btn" class="btn btn-primary rounded-circle position-fixed" style="bottom: 60px; right: 25px; z-index: 1050;">
+  <i class="fas fa-robot"></i>
+</button>
+
+
+  <script src="https://cdn.jsdelivr.net/npm/jquery@3.6.0/dist/jquery.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://unpkg.com/wavesurfer.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/plyr@3.7.8/dist/plyr.polyfilled.min.js"></script>
+  <script src="script.js"></script>
+  <script src="main.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      var fileInput = document.getElementById('chat-file');
+      var chooseBtn = document.getElementById('btn-choose-file');
+      var clearBtn = document.getElementById('clear-file');
+      var fileName = document.getElementById('selected-file-name');
+
+      if (!fileInput || !chooseBtn || !fileName) return;
+
+      chooseBtn.addEventListener('click', function () {
+        fileInput.click();
+      });
+
+      fileInput.addEventListener('change', function () {
+        if (fileInput.files && fileInput.files.length > 0) {
+          fileName.textContent = fileInput.files[0].name;
+          if (clearBtn) clearBtn.classList.remove('d-none');
+        } else {
+          fileName.textContent = 'No file selected';
+          if (clearBtn) clearBtn.classList.add('d-none');
+        }
+      });
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', function () {
+          fileInput.value = '';
+          fileInput.dispatchEvent(new Event('change'));
+        });
+      }
+    });
+  </script>
+</body>
+</html>

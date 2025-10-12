@@ -11,20 +11,60 @@ Wave Lite is a lightweight, peer-to-peer chat application built using WebRTC for
 - **Media Rendering**: Displays images inline, provides controls for audio/video, and includes download links for all files.
 - **Responsive UI**: WhatsApp-like chat interface with sender/receiver message alignment and timestamps.
 - **Error Handling**: Robust handling for connection timeouts, file transfer failures, and missing chunks with retry mechanisms.
-- **No Server Storage**: Uses Google Forms and Sheets for temporary SDP exchange during connection setup, with automatic cleanup.
+- **No Server Storage**: Uses Cloudflare Worker for temporary SDP exchange during connection setup, with automatic cleanup.
 
 ## Prerequisites
 - A modern web browser (e.g., Chrome, Firefox, Edge) with WebRTC support.
-- Internet access for initial connection setup via Google Forms/Sheets.
+- Internet access for initial connection setup via Cloudflare Worker.
 - Basic knowledge of HTML, CSS, and JavaScript for local hosting.
+- Cloudflare account for deploying the signaling worker (optional for local development).
 
 ## Project Structure
 ```
 wave-lite/
 ├── index.html      # Main HTML file for the application
 ├── script.js       # JavaScript logic for WebRTC, messaging, and file transfers
+├── main.js         # UI interactions and event handlers
 ├── style.css       # CSS for styling the UI
+├── assets/         # Images and other static assets
+├── about.html      # About page
+├── faq.html        # FAQ page
+├── feedback.html   # Feedback form
+├── usermanual.html # User manual
+├── workers/        # Cloudflare Worker for signaling
+│   ├── signaling.js # Signaling worker implementation
+│   └── wrangler.toml # Worker configuration
 └── README.md       # Project documentation
+```
+
+## Cloudflare Worker Setup
+
+The signaling system now uses a Cloudflare Worker instead of Google Forms. To deploy the worker:
+
+1. **Install Wrangler CLI**:
+   ```bash
+   npm install -g wrangler
+   ```
+
+2. **Login to Cloudflare**:
+   ```bash
+   wrangler login
+   ```
+
+3. **Deploy the Worker**:
+   ```bash
+   cd workers
+   wrangler deploy
+   ```
+
+4. **Update the Signaling URL**:
+   - After deployment, update the `SIGNALING_URL` in `script.js` with your worker URL
+   - The URL will be something like: `https://wavelite-signaling.your-subdomain.workers.dev`
+
+For local development, you can run the worker locally:
+```bash
+cd workers
+wrangler dev
 ```
 
 ## How to Use
@@ -50,7 +90,7 @@ wave-lite/
 
 ## Technical Details
 - **WebRTC**: Uses RTCPeerConnection and RTCDataChannel for peer-to-peer communication.
-- **SDP Exchange**: Temporarily stores Session Description Protocol (SDP) data in a Google Sheet via a Google Form, with automatic deletion after connection.
+- **SDP Exchange**: Temporarily stores Session Description Protocol (SDP) data in a Cloudflare Worker, with automatic deletion after connection.
 - **File Transfer**:
   - Files are split into 16KB chunks for reliable transfer over WebRTC Data Channels.
   - Includes buffer overflow handling, chunk resend requests, and a 15-second timeout with up to 3 retries for missing chunks.
@@ -58,7 +98,7 @@ wave-lite/
 - **Progress Bar**: Displays file name and percentage during uploads/downloads, styled with Bootstrap's progress bar component.
 
 ## Limitations
-- **CORS Restrictions**: The Google Forms/Sheets API uses `no-cors` mode, limiting error feedback. Ensure stable internet for SDP exchange.
+- **CORS Restrictions**: The Cloudflare Worker handles CORS properly, providing better error feedback. Ensure stable internet for SDP exchange.
 - **File Size**: Large files may require longer transfer times due to chunking and WebRTC buffer limits.
 - **Browser Compatibility**: Requires WebRTC support; older browsers may not work.
 - **Single Peer Connection**: Currently supports one-to-one chat; multi-peer support is not implemented.
