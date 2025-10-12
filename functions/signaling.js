@@ -263,7 +263,23 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
       });
     }
 
-    const signalingData = JSON.parse(signalingDataStr);
+    let signalingData;
+    try {
+      signalingData = JSON.parse(signalingDataStr);
+    } catch (parseError) {
+      console.error(`Error parsing signaling data for key ${key}:`, parseError.message);
+      // Delete the corrupted data
+      await env.SIGNALING_KV.delete(key);
+      return createErrorResponse(`Corrupted data found and removed`, 500, parseError.message);
+    }
+    
+    // Validate required fields
+    if (!signalingData.type || !signalingData.senderId || !signalingData.targetId || !signalingData.data) {
+      console.error(`Invalid signaling data structure for key ${key}:`, signalingData);
+      // Delete the invalid data
+      await env.SIGNALING_KV.delete(key);
+      return createErrorResponse(`Invalid data structure found and removed`, 500, 'Missing required fields');
+    }
     
     // Delete the consumed data to prevent re-polling
     await env.SIGNALING_KV.delete(key);
@@ -275,7 +291,7 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
       targetId: signalingData.targetId,
       data: signalingData.data,
       sessionId: signalingData.sessionId || null,
-      timestamp: signalingData.timestamp
+      timestamp: signalingData.timestamp || Date.now()
     });
   } catch (error) {
     console.error(`Error polling ${type}:`, error.message);
@@ -296,7 +312,23 @@ async function handlePollCandidates(keys, env) {
       const signalingDataStr = await env.SIGNALING_KV.get(keyInfo.name);
       
       if (signalingDataStr) {
-        const signalingData = JSON.parse(signalingDataStr);
+        let signalingData;
+        try {
+          signalingData = JSON.parse(signalingDataStr);
+        } catch (parseError) {
+          console.error(`Error parsing candidate data for key ${keyInfo.name}:`, parseError.message);
+          // Delete the corrupted data
+          await env.SIGNALING_KV.delete(keyInfo.name);
+          continue;
+        }
+        
+        // Validate required fields
+        if (!signalingData.type || !signalingData.senderId || !signalingData.targetId || !signalingData.data) {
+          console.error(`Invalid candidate data structure for key ${keyInfo.name}:`, signalingData);
+          // Delete the invalid data
+          await env.SIGNALING_KV.delete(keyInfo.name);
+          continue;
+        }
         
         // Get targetId and senderId from the first valid data entry
         if (!targetId) {
@@ -308,7 +340,7 @@ async function handlePollCandidates(keys, env) {
           data: signalingData.data,
           candidateIndex: signalingData.candidateIndex || null,
           sessionId: signalingData.sessionId || null,
-          timestamp: signalingData.timestamp
+          timestamp: signalingData.timestamp || Date.now()
         });
         keysToDelete.push(keyInfo.name);
       }
