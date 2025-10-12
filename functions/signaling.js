@@ -52,35 +52,40 @@ function createSuccessResponse(data, status = 200) {
 }
 
 export async function onRequest(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
-  const method = request.method;
-
-  // Minimal logging for production
-  if (method !== 'OPTIONS') {
-    console.log(`Signaling: ${method}`);
-  }
-
-  // Handle CORS preflight requests
-  if (method === 'OPTIONS') {
-    return new Response(null, {
-      status: 200,
-      headers: corsHeaders
-    });
-  }
-
-  // Check if KV storage is available
-  if (!env.SIGNALING_KV) {
-    console.error('KV storage not configured');
-    return createErrorResponse('KV storage not configured', 500);
-  }
-
   try {
+    const { request, env } = context;
+    const url = new URL(request.url);
+    const method = request.method;
+
+    // Enhanced logging for debugging
+    if (method !== 'OPTIONS') {
+      console.log(`Signaling: ${method} ${url.pathname}${url.search}`);
+    }
+
+    // Handle CORS preflight requests
+    if (method === 'OPTIONS') {
+      return new Response(null, {
+        status: 200,
+        headers: corsHeaders
+      });
+    }
+
+    // Check if KV storage is available
+    if (!env.SIGNALING_KV) {
+      console.error('KV storage not configured - env.SIGNALING_KV is undefined');
+      return createErrorResponse('KV storage not configured', 500);
+    }
+
+    console.log('KV storage is available, processing request...');
+
     if (method === 'POST') {
+      console.log('Handling POST request...');
       return await handlePostRequest(request, env);
     } else if (method === 'GET') {
+      console.log('Handling GET request...');
       return await handleGetRequest(request, env);
     } else {
+      console.log(`Unsupported method: ${method}`);
       return createErrorResponse('Method not allowed', 405, {
         method,
         allowed: ['GET', 'POST', 'OPTIONS']
@@ -88,6 +93,8 @@ export async function onRequest(context) {
     }
   } catch (error) {
     console.error('Signaling function error:', error.message);
+    console.error('Full error object:', error);
+    console.error('Error stack:', error.stack);
     return createErrorResponse('Internal server error', 500, error.message);
   }
 }
@@ -136,21 +143,32 @@ async function handlePostRequest(request, env) {
 
 // Handle GET requests (poll for signaling data)
 async function handleGetRequest(request, env) {
-  const url = new URL(request.url);
-  const type = url.searchParams.get('type');
-  const targetId = url.searchParams.get('targetId');
-  const senderId = url.searchParams.get('senderId'); // Optional
-  const sessionId = url.searchParams.get('sessionId'); // Optional
+  try {
+    const url = new URL(request.url);
+    const type = url.searchParams.get('type');
+    const targetId = url.searchParams.get('targetId');
+    const senderId = url.searchParams.get('senderId'); // Optional
+    const sessionId = url.searchParams.get('sessionId'); // Optional
 
-  // Validate required fields
-  if (!type) {
-    return createErrorResponse('Missing required query parameter: type');
-  }
-  if (!targetId) {
-    return createErrorResponse('Missing required query parameter: targetId');
-  }
+    console.log(`GET request params: type=${type}, targetId=${targetId}, senderId=${senderId || 'none'}, sessionId=${sessionId || 'none'}`);
 
-  return await handlePollSignaling(type, targetId, senderId, sessionId, env);
+    // Validate required fields
+    if (!type) {
+      console.log('Missing type parameter');
+      return createErrorResponse('Missing required query parameter: type');
+    }
+    if (!targetId) {
+      console.log('Missing targetId parameter');
+      return createErrorResponse('Missing required query parameter: targetId');
+    }
+
+    console.log('Calling handlePollSignaling...');
+    return await handlePollSignaling(type, targetId, senderId, sessionId, env);
+  } catch (error) {
+    console.error('Error in handleGetRequest:', error.message);
+    console.error('Full error:', error);
+    return createErrorResponse('Error handling GET request', 500, error.message);
+  }
 }
 
 // Store signaling data in KV (for offer/answer)
@@ -227,6 +245,8 @@ async function handleStoreCandidate(senderId, targetId, data, sessionId, env) {
 // Poll for signaling data
 async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
   try {
+    console.log(`Polling for ${type}, targetId: ${targetId}, senderId: ${senderId || 'any'}, sessionId: ${sessionId || 'none'}`);
+    
     let prefix;
     if (senderId) {
       // If senderId is specified, only look for data from that sender
@@ -236,9 +256,25 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
       prefix = `${type}:${targetId}:`;
     }
 
-    const listResult = await env.SIGNALING_KV.list({ prefix });
+    console.log(`Using prefix: ${prefix}`);
+
+    // Check if KV is available before using it
+    if (!env.SIGNALING_KV) {
+      console.error('KV storage not available in handlePollSignaling');
+      return createErrorResponse('KV storage not available', 500);
+    }
+
+    let listResult;
+    try {
+      listResult = await env.SIGNALING_KV.list({ prefix });
+      console.log(`KV list returned ${listResult.keys.length} keys`);
+    } catch (kvError) {
+      console.error('KV list error:', kvError.message);
+      return createErrorResponse('KV storage error', 500, kvError.message);
+    }
     
     if (listResult.keys.length === 0) {
+      console.log(`No ${type} found for targetId: ${targetId}`);
       return createSuccessResponse({ 
         found: false,
         message: `No ${type} found for targetId: ${targetId}${senderId ? ` from senderId: ${senderId}` : ''}${sessionId ? ` with sessionId: ${sessionId}` : ''}`,
@@ -253,9 +289,18 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
 
     // For offer/answer, get the first available signaling data
     const key = listResult.keys[0].name;
-    const signalingDataStr = await env.SIGNALING_KV.get(key);
+    console.log(`Retrieving data for key: ${key}`);
+    
+    let signalingDataStr;
+    try {
+      signalingDataStr = await env.SIGNALING_KV.get(key);
+    } catch (kvError) {
+      console.error('KV get error:', kvError.message);
+      return createErrorResponse('KV storage error', 500, kvError.message);
+    }
     
     if (!signalingDataStr) {
+      console.log(`No data found for key: ${key}`);
       return createSuccessResponse({ 
         found: false,
         message: `No ${type} found for targetId: ${targetId}${senderId ? ` from senderId: ${senderId}` : ''}${sessionId ? ` with sessionId: ${sessionId}` : ''}`,
@@ -266,10 +311,15 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
     let signalingData;
     try {
       signalingData = JSON.parse(signalingDataStr);
+      console.log(`Parsed signaling data for ${type}`);
     } catch (parseError) {
       console.error(`Error parsing signaling data for key ${key}:`, parseError.message);
       // Delete the corrupted data
-      await env.SIGNALING_KV.delete(key);
+      try {
+        await env.SIGNALING_KV.delete(key);
+      } catch (deleteError) {
+        console.error('Error deleting corrupted data:', deleteError.message);
+      }
       return createErrorResponse(`Corrupted data found and removed`, 500, parseError.message);
     }
     
@@ -277,13 +327,24 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
     if (!signalingData.type || !signalingData.senderId || !signalingData.targetId || !signalingData.data) {
       console.error(`Invalid signaling data structure for key ${key}:`, signalingData);
       // Delete the invalid data
-      await env.SIGNALING_KV.delete(key);
+      try {
+        await env.SIGNALING_KV.delete(key);
+      } catch (deleteError) {
+        console.error('Error deleting invalid data:', deleteError.message);
+      }
       return createErrorResponse(`Invalid data structure found and removed`, 500, 'Missing required fields');
     }
     
     // Delete the consumed data to prevent re-polling
-    await env.SIGNALING_KV.delete(key);
+    try {
+      await env.SIGNALING_KV.delete(key);
+      console.log(`Deleted consumed data for key: ${key}`);
+    } catch (deleteError) {
+      console.error('Error deleting consumed data:', deleteError.message);
+      // Continue anyway, don't fail the request
+    }
 
+    console.log(`Successfully retrieved ${type} for targetId: ${targetId}`);
     return createSuccessResponse({ 
       found: true,
       type: signalingData.type,
@@ -295,6 +356,7 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
     });
   } catch (error) {
     console.error(`Error polling ${type}:`, error.message);
+    console.error('Full error:', error);
     return createErrorResponse(`Failed to poll ${type}`, 500, error.message);
   }
 }
