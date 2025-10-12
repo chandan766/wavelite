@@ -538,13 +538,16 @@ async function submitSDP(peerId, role, sdp) {
     // Generate a session ID for this connection
     const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
+    // Get the current user's peer ID (the sender)
+    const currentPeerId = localStorage.getItem("peerIds") || "peer123";
+    
     const response = await fetch(SIGNALING_URL, {
       method: "POST",
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         type: role, 
-        senderId: peerId, // The current peer is the sender
-        targetId: peerId, // For now, we'll use the same peerId as target
+        senderId: currentPeerId, // The current user is the sender
+        targetId: peerId, // The target peer we want to connect to
         data: sdp,
         sessionId: sessionId
       }),
@@ -555,7 +558,7 @@ async function submitSDP(peerId, role, sdp) {
     }
     
     const result = await response.json();
-    console.log(`Submitted ${role} SDP for peerId: ${peerId}`, result);
+    console.log(`Submitted ${role} SDP from ${currentPeerId} to ${peerId}`, result);
     updateConnectionStatus("Offer Submitted", "99", false);
     
     // Store session ID for this connection
@@ -570,9 +573,12 @@ async function submitSDP(peerId, role, sdp) {
 
 async function fetchSDP(peerId, role) {
   try {
+    // Get the current user's peer ID (the target)
+    const currentPeerId = localStorage.getItem("peerIds") || "peer123";
+    
     // Get session ID for this peer if available
     const sessionId = localStorage.getItem(`sessionId-${peerId}`);
-    let url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&targetId=${encodeURIComponent(peerId)}`;
+    let url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&targetId=${encodeURIComponent(currentPeerId)}`;
     
     if (sessionId) {
       url += `&sessionId=${encodeURIComponent(sessionId)}`;
@@ -590,7 +596,7 @@ async function fetchSDP(peerId, role) {
     const result = await response.json();
     
     if (result.found) {
-      console.log(`Found ${role} SDP for peerId: ${peerId} from senderId: ${result.senderId}`);
+      console.log(`Found ${role} SDP for current user ${currentPeerId} from senderId: ${result.senderId}`);
       
       // Handle different response formats
       if (role === 'candidate' && result.candidates) {
@@ -611,11 +617,11 @@ async function fetchSDP(peerId, role) {
         };
       }
     } else {
-      console.log(`No ${role} SDP found for peerId: ${peerId}`);
+      console.log(`No ${role} SDP found for current user ${currentPeerId}`);
       return null;
     }
   } catch (e) {
-    console.error(`Failed to fetch ${role} SDP for peerId: ${peerId}:`, e);
+    console.error(`Failed to fetch ${role} SDP for current user:`, e);
     return null;
   }
 }
@@ -1415,6 +1421,9 @@ function deletePeerFromSheet(peerId) {
     return;
   }
   
+  // Get the current user's peer ID
+  const currentPeerId = localStorage.getItem("peerIds") || "peer123";
+  
   // Get session ID for this peer if available
   const sessionId = localStorage.getItem(`sessionId-${peerId}`);
   
@@ -1423,8 +1432,8 @@ function deletePeerFromSheet(peerId) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
       type: "cleanup", 
-      senderId: peerId,
-      targetId: peerId,
+      senderId: currentPeerId, // Current user is the sender
+      targetId: peerId, // Target peer to clean up
       sessionId: sessionId
     }),
   })
