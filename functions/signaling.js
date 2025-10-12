@@ -120,7 +120,8 @@ async function handlePostRequest(request, env) {
       }
       return await handleStoreAnswer(peerId, data, env);
     case 'cleanup':
-      return await handleCleanup(peerId, env);
+      const { cleanupType } = body;
+      return await handleCleanup(peerId, env, cleanupType);
     default:
       console.log(`❌ Invalid type: ${type}`);
       return createErrorResponse(`Invalid type: ${type}. Valid types are: offer, answer, cleanup`);
@@ -308,12 +309,17 @@ async function handlePollSignaling(type, peerId, env) {
       });
     }
     
-    // Delete the consumed data to prevent re-polling
-    try {
-      await env.SIGNALING_KV.delete(key);
-      console.log(`🗑️ Deleted consumed ${type} data for peerId: ${peerId}`);
-    } catch (deleteError) {
-      console.log('⚠️ Error deleting consumed data (non-critical):', deleteError.message);
+    // For offers and answers, don't delete immediately - let the frontend handle cleanup
+    // Only delete candidates immediately as they are consumed
+    if (type === 'candidate') {
+      try {
+        await env.SIGNALING_KV.delete(key);
+        console.log(`🗑️ Deleted consumed ${type} data for peerId: ${peerId}`);
+      } catch (deleteError) {
+        console.log('⚠️ Error deleting consumed data (non-critical):', deleteError.message);
+      }
+    } else {
+      console.log(`ℹ️ Keeping ${type} data for peerId: ${peerId} - will be cleaned up after connection`);
     }
 
     console.log(`✅ Successfully retrieved ${type} for peerId: ${peerId}`);
@@ -338,9 +344,9 @@ async function handlePollSignaling(type, peerId, env) {
 
 
 // Handle cleanup - Simplified version
-async function handleCleanup(peerId, env) {
+async function handleCleanup(peerId, env, cleanupType = null) {
   try {
-    console.log(`🗑️ Cleaning up signaling data for peerId: ${peerId}`);
+    console.log(`🗑️ Cleaning up signaling data for peerId: ${peerId}${cleanupType ? ` (type: ${cleanupType})` : ''}`);
     let deletedCount = 0;
     
     // If peerId is empty, do global cleanup
@@ -367,7 +373,7 @@ async function handleCleanup(peerId, env) {
     }
     
     // Clean up specific peerId
-    const types = ['offer', 'answer'];
+    const types = cleanupType ? [cleanupType] : ['offer', 'answer'];
     
     for (const type of types) {
       const key = getSignalingKey(type, peerId);

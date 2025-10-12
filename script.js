@@ -469,6 +469,10 @@ async function setupOfferer(peerId) {
           updateConnectionStatus("Connected Successfully!", "100", true);
           console.log("✅ Remote description (answer) set successfully");
           console.log(`🎉 Connection established successfully!`);
+          
+          // Clean up signaling data after successful connection
+          console.log(`🗑️ Cleaning up signaling data after successful connection`);
+          deletePeerFromSheet(peerId);
         } catch (error) {
           console.error("❌ Failed to set remote description (answer):", error);
         }
@@ -534,6 +538,10 @@ async function setupAnswerer(offerEntry) {
     );
     
     console.log("✅ Answer SDP submitted successfully!");
+    
+    // Clean up offer data after submitting answer (offer is no longer needed)
+    console.log(`🗑️ Cleaning up offer data after submitting answer`);
+    cleanupSignalingData(offerEntry.peerId, "offer");
   } catch (error) {
     console.error("❌ Error setting up answerer:", error);
     $("#peerIdSubmit").prop("disabled", false).text("Connect");
@@ -1465,6 +1473,30 @@ function deletePeerFromSheet(peerId) {
       console.log(`✅ Cleaned up signaling data for peerId: ${peerId}`, result);
     })
     .catch((err) => console.error(`❌ Cleanup error for peerId: ${peerId}:`, err));
+}
+
+function cleanupSignalingData(peerId, type) {
+  if (!peerId) {
+    console.error("❌ peerId is undefined in cleanupSignalingData");
+    return;
+  }
+  
+  console.log(`🗑️ Cleaning up ${type} data for peerId: ${peerId}`);
+  
+  fetch(SIGNALING_URL, {
+    method: "POST",
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ 
+      type: "cleanup", 
+      peerId: peerId,
+      cleanupType: type
+    }),
+  })
+    .then((res) => res.json())
+    .then((result) => {
+      console.log(`✅ Cleaned up ${type} data for peerId: ${peerId}`, result);
+    })
+    .catch((err) => console.error(`❌ Cleanup error for ${type} peerId: ${peerId}:`, err));
 }
 
 async function startJoinConnection(peerId) {
