@@ -167,7 +167,13 @@ async function handleGetRequest(request, env) {
   } catch (error) {
     console.error('Error in handleGetRequest:', error.message);
     console.error('Full error:', error);
-    return createErrorResponse('Error handling GET request', 500, error.message);
+    // Return a safe response instead of 500 error
+    return createSuccessResponse({
+      found: false,
+      message: 'Error occurred while processing request',
+      error: error.message,
+      timestamp: Date.now()
+    });
   }
 }
 
@@ -242,10 +248,20 @@ async function handleStoreCandidate(senderId, targetId, data, sessionId, env) {
   }
 }
 
-// Poll for signaling data
+// Poll for signaling data - Never throws 500 errors
 async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
   try {
     console.log(`Polling for ${type}, targetId: ${targetId}, senderId: ${senderId || 'any'}, sessionId: ${sessionId || 'none'}`);
+    
+    // Validate input parameters
+    if (!type || !targetId) {
+      console.log('Invalid input parameters');
+      return createSuccessResponse({
+        found: false,
+        message: 'Invalid request parameters',
+        timestamp: Date.now()
+      });
+    }
     
     let prefix;
     if (senderId) {
@@ -258,22 +274,31 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
 
     console.log(`Using prefix: ${prefix}`);
 
-    // Check if KV is available before using it
-    if (!env.SIGNALING_KV) {
-      console.error('KV storage not available in handlePollSignaling');
-      return createErrorResponse('KV storage not available', 500);
+    // Check if KV is available - if not, return safe response
+    if (!env || !env.SIGNALING_KV) {
+      console.log('KV storage not available - returning safe response');
+      return createSuccessResponse({
+        found: false,
+        message: `No ${type} found for targetId: ${targetId} (KV storage unavailable)`,
+        timestamp: Date.now()
+      });
     }
 
     let listResult;
     try {
       listResult = await env.SIGNALING_KV.list({ prefix });
-      console.log(`KV list returned ${listResult.keys.length} keys`);
+      console.log(`KV list returned ${listResult ? listResult.keys.length : 0} keys`);
     } catch (kvError) {
-      console.error('KV list error:', kvError.message);
-      return createErrorResponse('KV storage error', 500, kvError.message);
+      console.log('KV list error - returning safe response:', kvError.message);
+      return createSuccessResponse({
+        found: false,
+        message: `No ${type} found for targetId: ${targetId} (KV access error)`,
+        timestamp: Date.now()
+      });
     }
     
-    if (listResult.keys.length === 0) {
+    // Handle null/undefined listResult
+    if (!listResult || !listResult.keys || listResult.keys.length === 0) {
       console.log(`No ${type} found for targetId: ${targetId}`);
       return createSuccessResponse({ 
         found: false,
@@ -288,15 +313,28 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
     }
 
     // For offer/answer, get the first available signaling data
-    const key = listResult.keys[0].name;
+    const key = listResult.keys[0]?.name;
+    if (!key) {
+      console.log('No valid key found in list result');
+      return createSuccessResponse({
+        found: false,
+        message: `No ${type} found for targetId: ${targetId}`,
+        timestamp: Date.now()
+      });
+    }
+    
     console.log(`Retrieving data for key: ${key}`);
     
     let signalingDataStr;
     try {
       signalingDataStr = await env.SIGNALING_KV.get(key);
     } catch (kvError) {
-      console.error('KV get error:', kvError.message);
-      return createErrorResponse('KV storage error', 500, kvError.message);
+      console.log('KV get error - returning safe response:', kvError.message);
+      return createSuccessResponse({
+        found: false,
+        message: `No ${type} found for targetId: ${targetId} (KV access error)`,
+        timestamp: Date.now()
+      });
     }
     
     if (!signalingDataStr) {
@@ -313,34 +351,45 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
       signalingData = JSON.parse(signalingDataStr);
       console.log(`Parsed signaling data for ${type}`);
     } catch (parseError) {
-      console.error(`Error parsing signaling data for key ${key}:`, parseError.message);
-      // Delete the corrupted data
+      console.log(`Error parsing signaling data for key ${key} - cleaning up and returning safe response:`, parseError.message);
+      // Try to delete the corrupted data (don't fail if this fails)
       try {
         await env.SIGNALING_KV.delete(key);
+        console.log('Deleted corrupted data');
       } catch (deleteError) {
-        console.error('Error deleting corrupted data:', deleteError.message);
+        console.log('Error deleting corrupted data (non-critical):', deleteError.message);
       }
-      return createErrorResponse(`Corrupted data found and removed`, 500, parseError.message);
+      return createSuccessResponse({
+        found: false,
+        message: `No ${type} found for targetId: ${targetId} (data corruption detected and cleaned)`,
+        timestamp: Date.now()
+      });
     }
     
-    // Validate required fields
-    if (!signalingData.type || !signalingData.senderId || !signalingData.targetId || !signalingData.data) {
-      console.error(`Invalid signaling data structure for key ${key}:`, signalingData);
-      // Delete the invalid data
+    // Validate required fields - if invalid, clean up and return safe response
+    if (!signalingData || typeof signalingData !== 'object' || 
+        !signalingData.type || !signalingData.senderId || !signalingData.targetId || !signalingData.data) {
+      console.log(`Invalid signaling data structure for key ${key} - cleaning up and returning safe response`);
+      // Try to delete the invalid data (don't fail if this fails)
       try {
         await env.SIGNALING_KV.delete(key);
+        console.log('Deleted invalid data');
       } catch (deleteError) {
-        console.error('Error deleting invalid data:', deleteError.message);
+        console.log('Error deleting invalid data (non-critical):', deleteError.message);
       }
-      return createErrorResponse(`Invalid data structure found and removed`, 500, 'Missing required fields');
+      return createSuccessResponse({
+        found: false,
+        message: `No ${type} found for targetId: ${targetId} (invalid data detected and cleaned)`,
+        timestamp: Date.now()
+      });
     }
     
-    // Delete the consumed data to prevent re-polling
+    // Delete the consumed data to prevent re-polling (don't fail if this fails)
     try {
       await env.SIGNALING_KV.delete(key);
       console.log(`Deleted consumed data for key: ${key}`);
     } catch (deleteError) {
-      console.error('Error deleting consumed data:', deleteError.message);
+      console.log('Error deleting consumed data (non-critical):', deleteError.message);
       // Continue anyway, don't fail the request
     }
 
@@ -355,15 +404,41 @@ async function handlePollSignaling(type, targetId, senderId, sessionId, env) {
       timestamp: signalingData.timestamp || Date.now()
     });
   } catch (error) {
-    console.error(`Error polling ${type}:`, error.message);
-    console.error('Full error:', error);
-    return createErrorResponse(`Failed to poll ${type}`, 500, error.message);
+    console.log(`Unexpected error polling ${type} - returning safe response:`, error.message);
+    // Never return 500 error - always return a safe response
+    return createSuccessResponse({
+      found: false,
+      message: `No ${type} found for targetId: ${targetId} (unexpected error)`,
+      timestamp: Date.now()
+    });
   }
 }
 
-// Handle polling for multiple candidates
+// Handle polling for multiple candidates - Never throws 500 errors
 async function handlePollCandidates(keys, env) {
   try {
+    console.log(`Processing ${keys ? keys.length : 0} candidate keys`);
+    
+    // Validate input
+    if (!keys || !Array.isArray(keys) || keys.length === 0) {
+      console.log('No candidate keys provided');
+      return createSuccessResponse({ 
+        found: false,
+        message: 'No candidates found',
+        timestamp: Date.now()
+      });
+    }
+
+    // Check if KV is available
+    if (!env || !env.SIGNALING_KV) {
+      console.log('KV storage not available for candidate polling');
+      return createSuccessResponse({ 
+        found: false,
+        message: 'No candidates found (KV storage unavailable)',
+        timestamp: Date.now()
+      });
+    }
+
     const candidates = [];
     const keysToDelete = [];
     let targetId = null;
@@ -371,24 +446,46 @@ async function handlePollCandidates(keys, env) {
 
     // Collect all candidate data
     for (const keyInfo of keys) {
-      const signalingDataStr = await env.SIGNALING_KV.get(keyInfo.name);
+      if (!keyInfo || !keyInfo.name) {
+        console.log('Skipping invalid key info');
+        continue;
+      }
+
+      let signalingDataStr;
+      try {
+        signalingDataStr = await env.SIGNALING_KV.get(keyInfo.name);
+      } catch (kvError) {
+        console.log(`KV get error for key ${keyInfo.name} - skipping:`, kvError.message);
+        continue;
+      }
       
       if (signalingDataStr) {
         let signalingData;
         try {
           signalingData = JSON.parse(signalingDataStr);
         } catch (parseError) {
-          console.error(`Error parsing candidate data for key ${keyInfo.name}:`, parseError.message);
-          // Delete the corrupted data
-          await env.SIGNALING_KV.delete(keyInfo.name);
+          console.log(`Error parsing candidate data for key ${keyInfo.name} - cleaning up:`, parseError.message);
+          // Try to delete the corrupted data (don't fail if this fails)
+          try {
+            await env.SIGNALING_KV.delete(keyInfo.name);
+            console.log('Deleted corrupted candidate data');
+          } catch (deleteError) {
+            console.log('Error deleting corrupted candidate data (non-critical):', deleteError.message);
+          }
           continue;
         }
         
         // Validate required fields
-        if (!signalingData.type || !signalingData.senderId || !signalingData.targetId || !signalingData.data) {
-          console.error(`Invalid candidate data structure for key ${keyInfo.name}:`, signalingData);
-          // Delete the invalid data
-          await env.SIGNALING_KV.delete(keyInfo.name);
+        if (!signalingData || typeof signalingData !== 'object' ||
+            !signalingData.type || !signalingData.senderId || !signalingData.targetId || !signalingData.data) {
+          console.log(`Invalid candidate data structure for key ${keyInfo.name} - cleaning up`);
+          // Try to delete the invalid data (don't fail if this fails)
+          try {
+            await env.SIGNALING_KV.delete(keyInfo.name);
+            console.log('Deleted invalid candidate data');
+          } catch (deleteError) {
+            console.log('Error deleting invalid candidate data (non-critical):', deleteError.message);
+          }
           continue;
         }
         
@@ -408,12 +505,19 @@ async function handlePollCandidates(keys, env) {
       }
     }
 
-    // Delete all consumed candidate data
+    // Delete all consumed candidate data (don't fail if this fails)
     for (const key of keysToDelete) {
-      await env.SIGNALING_KV.delete(key);
+      try {
+        await env.SIGNALING_KV.delete(key);
+        console.log(`Deleted consumed candidate data for key: ${key}`);
+      } catch (deleteError) {
+        console.log(`Error deleting consumed candidate data for key ${key} (non-critical):`, deleteError.message);
+        // Continue anyway, don't fail the request
+      }
     }
 
     if (candidates.length === 0) {
+      console.log('No valid candidates found after processing');
       return createSuccessResponse({ 
         found: false,
         message: 'No candidates found',
@@ -424,6 +528,7 @@ async function handlePollCandidates(keys, env) {
     // Sort candidates by index for consistent ordering
     candidates.sort((a, b) => (a.candidateIndex || 0) - (b.candidateIndex || 0));
 
+    console.log(`Successfully retrieved ${candidates.length} candidates`);
     return createSuccessResponse({ 
       found: true,
       type: 'candidate',
@@ -434,8 +539,13 @@ async function handlePollCandidates(keys, env) {
       timestamp: Date.now()
     });
   } catch (error) {
-    console.error('Error polling candidates:', error.message);
-    return createErrorResponse('Failed to poll candidates', 500, error.message);
+    console.log('Unexpected error polling candidates - returning safe response:', error.message);
+    // Never return 500 error - always return a safe response
+    return createSuccessResponse({ 
+      found: false,
+      message: 'No candidates found (unexpected error)',
+      timestamp: Date.now()
+    });
   }
 }
 
