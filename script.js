@@ -363,20 +363,24 @@ $(document).ready(() => {
 });
 
 async function startConnection(peerId) {
-  console.log(`Starting connection for peerId: ${peerId}`);
+  console.log(`🚀 Starting connection for peerId: ${peerId}`);
+  console.log(`🔍 Checking for existing offers...`);
+  
   const offerEntry = await fetchSDP(peerId, "offer");
   if (offerEntry) {
     // Act as answerer
-    console.log("Offer found, acting as answerer");
+    console.log(`✅ Offer found for peerId: ${peerId}, acting as answerer`);
     await setupAnswerer(offerEntry);
   } else {
     // Act as offerer
-    console.log("No offer found, acting as offerer");
+    console.log(`❌ No offer found for peerId: ${peerId}, acting as offerer`);
     await setupOfferer(peerId);
   }
 }
 
 async function setupOfferer(peerId) {
+  console.log(`🔄 Setting up offerer for peerId: ${peerId}`);
+  
   localConnection = createPeerConnection();
   dataChannel = localConnection.createDataChannel("chat");
   mediaChannels = [];
@@ -388,23 +392,46 @@ async function setupOfferer(peerId) {
 
   setupDataChannel();
   updateConnectionStatus("Offer Creating...", "10", false);
+  
   try {
+    console.log("🔄 Creating offer...");
     const offer = await localConnection.createOffer();
+    console.log("✅ Offer created successfully");
+    console.log("📦 Offer SDP:", JSON.stringify(offer).substring(0, 100) + "...");
+    
     await localConnection.setLocalDescription(offer);
+    console.log("✅ Local offer description set successfully");
+    
+    console.log("⏳ Waiting for ICE gathering to complete...");
     await waitForIceGathering(localConnection);
-    console.log(`Submitting offer SDP for peerId: ${peerId}`);
+    console.log("✅ ICE gathering completed");
+    
+    console.log(`📤 Submitting offer SDP for peerId: ${peerId}`);
+    console.log("📦 Final offer SDP:", JSON.stringify(localConnection.localDescription).substring(0, 100) + "...");
+    
     await submitSDP(
       peerId,
       "offer",
       JSON.stringify(localConnection.localDescription)
     );
+    
+    console.log("✅ Offer SDP submitted successfully!");
     updateConnectionStatus("Waiting for peer...", "100", true);
 
     // Start polling for the answer with timeout
     let startTime = Date.now();
+    let pollCount = 0;
+    
+    console.log(`⏰ Started polling for answers (timeout: ${CONNECTION_TIMEOUT/1000}s, interval: 3s)`);
+    
     pollingInterval = setInterval(async () => {
+      pollCount++;
       const elapsed = Date.now() - startTime;
+      
+      console.log(`🔍 Poll #${pollCount} for answer (elapsed: ${Math.round(elapsed/1000)}s)`);
+      
       if (elapsed > CONNECTION_TIMEOUT) {
+        console.log(`⏰ Connection timeout reached (${CONNECTION_TIMEOUT/1000}s), stopping polling`);
         clearInterval(pollingInterval);
         $("#peerIdSubmit").prop("disabled", false).text("Connect");
         $("#joinPeer").prop("disabled", false).text("Join");
@@ -412,22 +439,30 @@ async function setupOfferer(peerId) {
         $("#delete-all-btn").click();
         return;
       }
+      
       const answerEntry = await fetchSDP(peerId, "answer");
       const percent = Math.min((elapsed / CONNECTION_TIMEOUT) * 100, 99);
       updateConnectionStatus("Waiting for peer...", percent, true);
+      
       if (answerEntry) {
-        console.log(`Answer SDP found for peerId: ${peerId}`);
+        console.log(`✅ Answer SDP found for peerId: ${peerId} on poll #${pollCount}`);
+        console.log(`🛑 Stopping polling for answers`);
         clearInterval(pollingInterval);
+        
         try {
+          console.log(`📦 Processing answer SDP...`);
           const sdp = JSON.parse(answerEntry.sdp);
           await localConnection.setRemoteDescription(
             new RTCSessionDescription(sdp)
           );
           updateConnectionStatus("Connected Successfully!", "100", true);
           console.log("✅ Remote description (answer) set successfully");
+          console.log(`🎉 Connection established successfully!`);
         } catch (error) {
           console.error("❌ Failed to set remote description (answer):", error);
         }
+      } else {
+        console.log(`❌ No answer SDP found yet for peerId: ${peerId} (poll #${pollCount})`);
       }
     }, 4000); // Polling interval 4 seconds
   } catch (error) {
@@ -464,21 +499,30 @@ async function setupAnswerer(offerEntry) {
     console.log("✅ Remote description (offer) set successfully");
 
     // Create and set local answer
-    console.log("Creating answer...");
+    console.log("🔄 Creating answer...");
     const answer = await localConnection.createAnswer();
+    console.log("✅ Answer created successfully");
+    console.log("📦 Answer SDP:", JSON.stringify(answer).substring(0, 100) + "...");
+    
     await localConnection.setLocalDescription(answer);
-    console.log("✅ Local answer set successfully");
+    console.log("✅ Local answer description set successfully");
 
     // Wait for ICE to complete
+    console.log("⏳ Waiting for ICE gathering to complete...");
     await waitForIceGathering(localConnection);
+    console.log("✅ ICE gathering completed");
 
     // Submit SDP
-    console.log(`Submitting answer SDP for peerId: ${offerEntry.peerId}`);
+    console.log(`📤 Submitting answer SDP for peerId: ${offerEntry.peerId}`);
+    console.log("📦 Final answer SDP:", JSON.stringify(localConnection.localDescription).substring(0, 100) + "...");
+    
     await submitSDP(
       offerEntry.peerId,
       "answer",
       JSON.stringify(localConnection.localDescription)
     );
+    
+    console.log("✅ Answer SDP submitted successfully!");
   } catch (error) {
     console.error("❌ Error setting up answerer:", error);
     $("#peerIdSubmit").prop("disabled", false).text("Connect");
@@ -1408,40 +1452,54 @@ function deletePeerFromSheet(peerId) {
 }
 
 async function startJoinConnection(peerId) {
-  console.log(`Starting join connection for peerId: ${peerId}`);
+  console.log(`🚀 Starting join connection for peerId: ${peerId}`);
   updateConnectionStatus("Waiting for offer...", "10", false);
+  
   // Start polling for offer with timeout
   let startTime = Date.now();
+  let pollCount = 0;
+  
   pollingInterval = setInterval(async () => {
+    pollCount++;
     const elapsed = Date.now() - startTime;
+    
+    console.log(`🔍 Poll #${pollCount} for offer (elapsed: ${Math.round(elapsed/1000)}s)`);
+    
     if (elapsed > CONNECTION_TIMEOUT) {
+      console.log(`⏰ Connection timeout reached (${CONNECTION_TIMEOUT/1000}s), stopping polling`);
       clearInterval(pollingInterval);
       $("#joinPeer").prop("disabled", false).text("Join");
       $("#peerIdSubmit").prop("disabled", false).text("Connect");
       showAlert("No offer found. Please try again or check peer ID.");
       return;
     }
+    
     const offerEntry = await fetchSDP(peerId, "offer");
     const percent = Math.min((elapsed / CONNECTION_TIMEOUT) * 100, 99);
     updateConnectionStatus("Waiting for offer...", percent, true);
+    
     if (offerEntry) {
-      console.log(
-        `Offer SDP found for peerId: ${peerId}, proceeding as answerer`
-      );
+      console.log(`✅ Offer SDP found for peerId: ${peerId} on poll #${pollCount}`);
+      console.log(`🛑 Stopping polling for offers`);
       clearInterval(pollingInterval);
+      
       try {
+        console.log(`🔄 Proceeding as answerer...`);
         await setupAnswerer(offerEntry);
         updateConnectionStatus("Joined Successfully", "100", true);
+        console.log(`🎉 Join connection completed successfully!`);
       } catch (error) {
-        console.error("Error during join connection:", error);
+        console.error("❌ Error during join connection:", error);
         $("#joinPeer").prop("disabled", false).text("Join");
         $("#peerIdSubmit").prop("disabled", false).text("Connect");
         showAlert("Failed to join connection. Please try again.");
       }
     } else {
-      console.log(`No offer SDP found yet for peerId: ${peerId}`);
+      console.log(`❌ No offer SDP found yet for peerId: ${peerId} (poll #${pollCount})`);
     }
   }, 3000); // Polling interval 3 seconds
+  
+  console.log(`⏰ Started polling for offers (timeout: ${CONNECTION_TIMEOUT/1000}s, interval: 3s)`);
 }
 
 // Initialize checkboxes from localStorage or default to 2
