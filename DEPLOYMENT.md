@@ -14,9 +14,10 @@ This guide explains how to deploy the WaveLite Chat application to Cloudflare Pa
 
 1. Upload all project files to your Git repository
 2. Ensure the `functions/` directory contains:
-   - `functions/signaling.js` - Unified signaling function
+   - `functions/signaling.js` - KV-based signaling function
 3. Make sure all Google Forms references have been removed
 4. Verify the function structure is correct for Cloudflare Pages
+5. **Important**: Set up Cloudflare KV storage for persistent signaling data
 
 ### 2. Deploy to Cloudflare Pages
 
@@ -39,17 +40,39 @@ This guide explains how to deploy the WaveLite Chat application to Cloudflare Pa
    - Click "Save and Deploy"
    - Wait for the deployment to complete
 
-### 3. Verify Deployment
+### 3. Set Up KV Storage
+
+1. **Create KV Namespace**
+   - In your Cloudflare dashboard, go to "Workers & Pages" > "KV"
+   - Click "Create a namespace"
+   - Name it `SIGNALING_KV` (or any name you prefer)
+   - Note the namespace ID
+
+2. **Bind KV to Pages Function**
+   - Go to your Pages project settings
+   - Navigate to "Settings" > "Functions"
+   - Add a KV namespace binding:
+     - Variable name: `SIGNALING_KV`
+     - KV namespace: Select the namespace you created
+   - Save the settings
+
+3. **Redeploy**
+   - Trigger a new deployment to apply the KV binding
+   - The function will now have access to persistent storage
+
+### 4. Verify Deployment
 
 1. **Test the Signaling Function**
-   - Visit `https://your-domain.pages.dev/test-signaling.html`
-   - Run all test functions to verify the signaling system works
+   - Open two browser tabs/windows to `https://your-domain.pages.dev/`
+   - In the first tab, enter a peer ID (e.g., "alice") and click "Connect"
+   - In the second tab, enter the same peer ID and click "Join"
+   - Verify the connection establishes successfully
    - Check browser console for any errors
 
 2. **Test the Main Application**
-   - Visit `https://your-domain.pages.dev/`
    - Try connecting with two different browsers/tabs
    - Test file sharing and messaging functionality
+   - Verify that polling stops after data is consumed
 
 ## Configuration
 
@@ -72,26 +95,33 @@ If you need to configure any environment variables:
 
 ### Common Issues
 
-1. **405 Method Not Allowed Error**
-   - **Cause**: Function not properly deployed or incorrect structure
-   - **Solution**: Ensure the unified function is in the correct location
-   - **Check**: Verify `functions/signaling.js` exists and is properly deployed
-   - **Test**: Use the test page to verify the function is working
+1. **KV Storage Not Configured Error**
+   - **Cause**: SIGNALING_KV environment variable not set
+   - **Solution**: Set up KV storage and bind it to the Pages function
+   - **Check**: Verify KV namespace is created and bound in Pages settings
+   - **Test**: Check function logs for KV-related errors
 
-2. **Signaling Function Not Working**
+2. **405 Method Not Allowed Error**
+   - **Cause**: Function not properly deployed or incorrect structure
+   - **Solution**: Ensure the KV-based function is in the correct location
+   - **Check**: Verify `functions/signaling.js` exists and is properly deployed
+   - **Test**: Check that both GET and POST requests are supported
+
+3. **Signaling Function Not Working**
    - Check that the function file exists in your repository:
-     - `functions/signaling.js` - Unified signaling function
+     - `functions/signaling.js` - KV-based signaling function
    - Verify the function is deployed by checking the Functions tab in Pages
    - Check browser console for CORS errors
-   - Test the signaling endpoints using the test page
+   - Verify KV storage is properly configured
+   - Test with two browser tabs to verify peer-to-peer communication
 
-3. **WebRTC Connection Fails**
+4. **WebRTC Connection Fails**
    - Ensure both clients are using HTTPS
    - Check STUN server configuration
    - Verify signaling data is being exchanged (check network tab)
    - Test signaling endpoints individually
 
-4. **File Transfer Issues**
+5. **File Transfer Issues**
    - Check browser console for chunk transfer errors
    - Verify data channel is properly established
    - Test with smaller files first

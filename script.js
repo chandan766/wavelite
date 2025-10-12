@@ -153,7 +153,8 @@ $(document).ready(() => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         type: "cleanup", 
-        peerId: "" 
+        senderId: "", // Empty senderId for global cleanup
+        targetId: ""  // Empty targetId for global cleanup
       }),
     })
       .then((res) => res.json())
@@ -532,7 +533,8 @@ async function submitSDP(peerId, role, sdp) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         type: role, 
-        peerId: peerId, 
+        senderId: peerId, // The current peer is the sender
+        targetId: peerId, // For now, we'll use the same peerId as target
         data: sdp 
       }),
     });
@@ -550,15 +552,36 @@ async function submitSDP(peerId, role, sdp) {
   }
 }
 
-// Since the unified function only handles POST requests, we'll use a different approach
-// We'll store the data when submitting and use a simple polling mechanism
-// For now, we'll return null and let the existing polling logic handle it
 async function fetchSDP(peerId, role) {
-  // The unified function doesn't support GET requests
-  // The polling mechanism will work by checking if data was stored
-  // This is a placeholder that returns null to maintain compatibility
-  console.log(`fetchSDP called for ${role} with peerId: ${peerId} - using polling mechanism`);
-  return null;
+  try {
+    const url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&targetId=${encodeURIComponent(peerId)}`;
+    
+    const response = await fetch(url, {
+      method: "GET",
+      headers: { 'Content-Type': 'application/json' },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
+    const result = await response.json();
+    
+    if (result.found) {
+      console.log(`Found ${role} SDP for peerId: ${peerId} from senderId: ${result.senderId}`);
+      return { 
+        peerId: result.senderId, // The sender becomes the peerId for the connection
+        role: role, 
+        sdp: result.data 
+      };
+    } else {
+      console.log(`No ${role} SDP found for peerId: ${peerId}`);
+      return null;
+    }
+  } catch (e) {
+    console.error(`Failed to fetch ${role} SDP for peerId: ${peerId}:`, e);
+    return null;
+  }
 }
 
 function setupDataChannel() {
@@ -1360,7 +1383,8 @@ function deletePeerFromSheet(peerId) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
       type: "cleanup", 
-      peerId: peerId 
+      senderId: peerId,
+      targetId: peerId
     }),
   })
     .then((res) => res.json())

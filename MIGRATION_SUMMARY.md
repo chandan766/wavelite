@@ -26,32 +26,34 @@ Successfully migrated the WaveLite Chat project from Google Forms to Cloudflare 
 **New File:** `functions/signaling.js`
 
 **Features:**
-- **Unified POST endpoint** - Single `/signaling` endpoint for all operations
-- **Type-based routing** - Determines operation from `type` field in JSON body
-- **POST /signaling** with `{ type: "offer", peerId: "X", data: "SDP" }` - Store WebRTC offers
-- **POST /signaling** with `{ type: "answer", peerId: "X", data: "SDP" }` - Store WebRTC answers
-- **POST /signaling** with `{ type: "cleanup", peerId: "X" }` - Clean up signaling data
-- **405 Method Not Allowed** - Returns 405 for non-POST requests
-- **400 Bad Request** - Returns 400 for invalid type values
-- **Automatic cleanup** - Data expires after 5 minutes
+- **KV-based persistent storage** - Uses Cloudflare KV for data persistence across function invocations
+- **Target peer routing** - Supports `senderId` and `targetId` for directed signaling
+- **POST /signaling** with `{ type: "offer", senderId: "X", targetId: "Y", data: "SDP" }` - Store WebRTC offers
+- **POST /signaling** with `{ type: "answer", senderId: "X", targetId: "Y", data: "SDP" }` - Store WebRTC answers
+- **POST /signaling** with `{ type: "candidate", senderId: "X", targetId: "Y", data: "ICE" }` - Store ICE candidates
+- **POST /signaling** with `{ type: "cleanup", senderId: "X", targetId: "Y" }` - Clean up signaling data
+- **GET /signaling?type=offer&targetId=Y** - Poll for signaling data (consumes data after retrieval)
+- **405 Method Not Allowed** - Returns 405 for unsupported HTTP methods
+- **400 Bad Request** - Returns 400 for missing required fields
+- **Automatic expiration** - KV data expires after 5 minutes
 - **CORS support** - Proper cross-origin headers
 - **Error handling** - Comprehensive error responses with consistent JSON format
 
 ### 3. Updated Frontend JavaScript
 
 **Key Changes in `script.js`:**
-- Replaced Google Forms URLs with unified Cloudflare Pages Function endpoint
-- Updated `submitSDP()` to use unified POST endpoint with type-based routing
-- Updated `fetchSDP()` to work with polling mechanism (returns null for compatibility)
-- Updated `deletePeerFromSheet()` to use unified cleanup endpoint
-- All requests now use `{ type: "operation", peerId: "X", data: "SDP" }` format
+- Replaced Google Forms URLs with KV-based Cloudflare Pages Function endpoint
+- Updated `submitSDP()` to use POST endpoint with `senderId` and `targetId` routing
+- Updated `fetchSDP()` to use GET endpoint for polling (consumes data after retrieval)
+- Updated `deletePeerFromSheet()` to use cleanup endpoint with peer IDs
+- All requests now use `{ type: "operation", senderId: "X", targetId: "Y", data: "SDP" }` format
+- Polling mechanism now stops after data is consumed (no infinite polling)
 - Improved error handling with proper HTTP status codes
 
 ### 4. Added Testing and Documentation
 
 **New Files:**
-- `test-signaling.html` - Test page for signaling function
-- `DEPLOYMENT.md` - Comprehensive deployment guide
+- `DEPLOYMENT.md` - Comprehensive deployment guide with KV setup instructions
 - `MIGRATION_SUMMARY.md` - This summary document
 
 **Updated Files:**
@@ -80,9 +82,13 @@ Successfully migrated the WaveLite Chat project from Google Forms to Cloudflare 
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| POST | `/signaling` | Store WebRTC offer (type: "offer") |
-| POST | `/signaling` | Store WebRTC answer (type: "answer") |
-| POST | `/signaling` | Clean up data (type: "cleanup") |
+| POST | `/signaling` | Store WebRTC offer (type: "offer", senderId, targetId, data) |
+| POST | `/signaling` | Store WebRTC answer (type: "answer", senderId, targetId, data) |
+| POST | `/signaling` | Store ICE candidate (type: "candidate", senderId, targetId, data) |
+| POST | `/signaling` | Clean up data (type: "cleanup", senderId, targetId) |
+| GET | `/signaling?type=offer&targetId=Y` | Poll for offer (consumes data) |
+| GET | `/signaling?type=answer&targetId=Y` | Poll for answer (consumes data) |
+| GET | `/signaling?type=candidate&targetId=Y` | Poll for candidate (consumes data) |
 
 ### Request/Response Format
 
@@ -92,7 +98,8 @@ Successfully migrated the WaveLite Chat project from Google Forms to Cloudflare 
 POST /signaling
 {
   "type": "offer",
-  "peerId": "peer123",
+  "senderId": "alice",
+  "targetId": "bob",
   "data": "v=0\r\no=- 1234567890..."
 }
 
@@ -101,26 +108,30 @@ POST /signaling
   "success": true,
   "message": "Offer stored successfully",
   "type": "offer",
-  "peerId": "peer123"
+  "senderId": "alice",
+  "targetId": "bob"
 }
 ```
 
-**Store Answer:**
+**Poll for Offer:**
 ```json
 // Request
-POST /signaling
+GET /signaling?type=offer&targetId=bob
+
+// Response (found)
 {
-  "type": "answer",
-  "peerId": "peer123",
-  "data": "v=0\r\no=- 1234567890..."
+  "found": true,
+  "type": "offer",
+  "senderId": "alice",
+  "targetId": "bob",
+  "data": "v=0\r\no=- 1234567890...",
+  "timestamp": 1234567890
 }
 
-// Response
+// Response (not found)
 {
-  "success": true,
-  "message": "Answer stored successfully",
-  "type": "answer",
-  "peerId": "peer123"
+  "found": false,
+  "message": "No offer found for targetId: bob"
 }
 ```
 
@@ -130,7 +141,8 @@ POST /signaling
 POST /signaling
 {
   "type": "cleanup",
-  "peerId": "peer123"
+  "senderId": "alice",
+  "targetId": "bob"
 }
 
 // Response
@@ -138,7 +150,8 @@ POST /signaling
   "success": true,
   "message": "Cleaned up 2 signaling entries",
   "type": "cleanup",
-  "peerId": "peer123",
+  "senderId": "alice",
+  "targetId": "bob",
   "deletedCount": 2
 }
 ```
