@@ -367,12 +367,16 @@ async function startConnection(peerId, mode = "connect") {
   console.log(`🔍 Checking for existing offers...`);
   
   const offerEntry = await fetchSDP(peerId, "offer");
-  if (offerEntry) {
+  console.log(`🔍 fetchSDP result:`, offerEntry);
+  
+  if (offerEntry && offerEntry.found) {
     // Act as answerer
     console.log(`✅ Offer found for peerId: ${peerId}, acting as answerer`);
+    console.log(`📦 Offer data:`, offerEntry);
     await setupAnswerer(offerEntry);
   } else {
     // No offer found - check mode
+    console.log(`❌ No offer found for peerId: ${peerId}, offerEntry:`, offerEntry);
     if (mode === "join") {
       // User clicked "Join" - start polling for offers
       console.log(`❌ No offer found for peerId: ${peerId}, starting to poll for offers (Join mode)`);
@@ -625,19 +629,24 @@ async function fetchSDP(peerId, role) {
     }
     
     const result = await response.json();
+    console.log(`📦 fetchSDP response:`, result);
     
     if (result.found) {
       console.log(`✅ Found ${role} SDP for peerId: ${peerId}`);
       console.log(`📦 SDP data: ${result.data.substring(0, 100)}...`);
       
-      return { 
+      const returnData = { 
         peerId: result.peerId,
         role: role, 
         sdp: result.data,
-        timestamp: result.timestamp
+        timestamp: result.timestamp,
+        found: true
       };
+      console.log(`📤 Returning:`, returnData);
+      return returnData;
     } else {
       console.log(`❌ No ${role} SDP found for peerId: ${peerId}`);
+      console.log(`📤 Returning null`);
       return null;
     }
   } catch (e) {

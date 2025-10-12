@@ -261,11 +261,13 @@ async function handlePollSignaling(type, peerId, env) {
     
     if (!signalingDataStr) {
       console.log(`❌ No ${type} found for peerId: ${peerId}`);
-      return createSuccessResponse({ 
+      const response = createSuccessResponse({ 
         found: false,
         message: `No ${type} found for peerId: ${peerId}`,
         timestamp: Date.now()
       });
+      console.log(`📤 Backend returning not found response:`, response);
+      return response;
     }
 
     let signalingData;
@@ -315,13 +317,15 @@ async function handlePollSignaling(type, peerId, env) {
     }
 
     console.log(`✅ Successfully retrieved ${type} for peerId: ${peerId}`);
-    return createSuccessResponse({ 
+    const response = createSuccessResponse({ 
       found: true,
       type: signalingData.type,
       peerId: signalingData.peerId,
       data: signalingData.data,
       timestamp: signalingData.timestamp || Date.now()
     });
+    console.log(`📤 Backend returning response:`, response);
+    return response;
   } catch (error) {
     console.log(`💥 Unexpected error polling ${type} - returning safe response:`, error.message);
     return createSuccessResponse({
