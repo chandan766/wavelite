@@ -69,7 +69,7 @@ $(document).ready(() => {
     $("#peerBtnGroup").removeClass("d-flex").addClass("d-none");
     $("#connectionStatusPanel").removeClass("d-none");
     updateConnectionStatus("Connecting...", "5", false);
-    startConnection(peerId);
+    startConnection(peerId, "connect");
   });
 
   // Handle file selection
@@ -210,7 +210,7 @@ $(document).ready(() => {
     $("#peerBtnGroup").removeClass("d-flex").addClass("d-none");
     $("#connectionStatusPanel").removeClass("d-none");
     updateConnectionStatus("Joining...", "5", false);
-    startJoinConnection(peerId);
+    startConnection(peerId, "join");
   });
 
   $("#confirmSavePeerBtn").click(async () => {
@@ -362,8 +362,8 @@ $(document).ready(() => {
   }, 3000); // every 3 seconds
 });
 
-async function startConnection(peerId) {
-  console.log(`🚀 Starting connection for peerId: ${peerId}`);
+async function startConnection(peerId, mode = "connect") {
+  console.log(`🚀 Starting connection for peerId: ${peerId} (mode: ${mode})`);
   console.log(`🔍 Checking for existing offers...`);
   
   const offerEntry = await fetchSDP(peerId, "offer");
@@ -372,9 +372,16 @@ async function startConnection(peerId) {
     console.log(`✅ Offer found for peerId: ${peerId}, acting as answerer`);
     await setupAnswerer(offerEntry);
   } else {
-    // Act as offerer
-    console.log(`❌ No offer found for peerId: ${peerId}, acting as offerer`);
-    await setupOfferer(peerId);
+    // No offer found - check mode
+    if (mode === "join") {
+      // User clicked "Join" - start polling for offers
+      console.log(`❌ No offer found for peerId: ${peerId}, starting to poll for offers (Join mode)`);
+      startJoinConnection(peerId);
+    } else {
+      // User clicked "Connect" - act as offerer
+      console.log(`❌ No offer found for peerId: ${peerId}, acting as offerer (Connect mode)`);
+      await setupOfferer(peerId);
+    }
   }
 }
 
