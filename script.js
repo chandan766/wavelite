@@ -154,12 +154,19 @@ $(document).ready(() => {
       body: JSON.stringify({ 
         type: "cleanup", 
         senderId: "", // Empty senderId for global cleanup
-        targetId: ""  // Empty targetId for global cleanup
+        targetId: "", // Empty targetId for global cleanup
+        sessionId: "" // Empty sessionId for global cleanup
       }),
     })
       .then((res) => res.json())
       .then((result) => {
         showAlert(`Deleted all SDP entries: ${result.message}`, false);
+        // Clear all stored session IDs
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sessionId-')) {
+            localStorage.removeItem(key);
+          }
+        });
         // Wait 3 seconds before reloading
         setTimeout(() => {
           location.reload();
@@ -528,6 +535,9 @@ async function submitSDP(peerId, role, sdp) {
   updateConnectionStatus("Submitting Offer...", "90", false);
   
   try {
+    // Generate a session ID for this connection
+    const sessionId = `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
     const response = await fetch(SIGNALING_URL, {
       method: "POST",
       headers: { 'Content-Type': 'application/json' },
@@ -535,7 +545,8 @@ async function submitSDP(peerId, role, sdp) {
         type: role, 
         senderId: peerId, // The current peer is the sender
         targetId: peerId, // For now, we'll use the same peerId as target
-        data: sdp 
+        data: sdp,
+        sessionId: sessionId
       }),
     });
     
@@ -546,6 +557,11 @@ async function submitSDP(peerId, role, sdp) {
     const result = await response.json();
     console.log(`Submitted ${role} SDP for peerId: ${peerId}`, result);
     updateConnectionStatus("Offer Submitted", "99", false);
+    
+    // Store session ID for this connection
+    if (result.success) {
+      localStorage.setItem(`sessionId-${peerId}`, sessionId);
+    }
   } catch (error) {
     console.error(`Error submitting ${role} SDP:`, error);
     throw error;
@@ -554,7 +570,13 @@ async function submitSDP(peerId, role, sdp) {
 
 async function fetchSDP(peerId, role) {
   try {
-    const url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&targetId=${encodeURIComponent(peerId)}`;
+    // Get session ID for this peer if available
+    const sessionId = localStorage.getItem(`sessionId-${peerId}`);
+    let url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&targetId=${encodeURIComponent(peerId)}`;
+    
+    if (sessionId) {
+      url += `&sessionId=${encodeURIComponent(sessionId)}`;
+    }
     
     const response = await fetch(url, {
       method: "GET",
@@ -569,11 +591,25 @@ async function fetchSDP(peerId, role) {
     
     if (result.found) {
       console.log(`Found ${role} SDP for peerId: ${peerId} from senderId: ${result.senderId}`);
-      return { 
-        peerId: result.senderId, // The sender becomes the peerId for the connection
-        role: role, 
-        sdp: result.data 
-      };
+      
+      // Handle different response formats
+      if (role === 'candidate' && result.candidates) {
+        // Handle candidate array response
+        return {
+          peerId: result.senderId,
+          role: role,
+          candidates: result.candidates,
+          count: result.count
+        };
+      } else {
+        // Handle single SDP response (offer/answer)
+        return { 
+          peerId: result.senderId,
+          role: role, 
+          sdp: result.data,
+          sessionId: result.sessionId
+        };
+      }
     } else {
       console.log(`No ${role} SDP found for peerId: ${peerId}`);
       return null;
@@ -1378,17 +1414,26 @@ function deletePeerFromSheet(peerId) {
     console.error("peerId is undefined in deletePeerFromSheet");
     return;
   }
+  
+  // Get session ID for this peer if available
+  const sessionId = localStorage.getItem(`sessionId-${peerId}`);
+  
   fetch(SIGNALING_URL, {
     method: "POST",
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ 
       type: "cleanup", 
       senderId: peerId,
-      targetId: peerId
+      targetId: peerId,
+      sessionId: sessionId
     }),
   })
     .then((res) => res.json())
-    .then((result) => console.log("Deleted SDP for peerId:", peerId, result))
+    .then((result) => {
+      console.log("Deleted SDP for peerId:", peerId, result);
+      // Clean up stored session ID
+      localStorage.removeItem(`sessionId-${peerId}`);
+    })
     .catch((err) => console.error("Delete error for peerId:", peerId, err));
 }
 
