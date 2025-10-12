@@ -13,7 +13,8 @@ This guide explains how to deploy the WaveLite Chat application to Cloudflare Pa
 ### 1. Prepare Your Repository
 
 1. Upload all project files to your Git repository
-2. Ensure the `functions/` directory contains `signaling.js` (the main signaling function)
+2. Ensure the `functions/` directory contains:
+   - `functions/signaling.js` - Unified signaling function
 3. Make sure all Google Forms references have been removed
 4. Verify the function structure is correct for Cloudflare Pages
 
@@ -71,17 +72,26 @@ If you need to configure any environment variables:
 
 ### Common Issues
 
-1. **Signaling Function Not Working**
-   - Check that `functions/signaling.js` exists in your repository
+1. **405 Method Not Allowed Error**
+   - **Cause**: Function not properly deployed or incorrect structure
+   - **Solution**: Ensure the unified function is in the correct location
+   - **Check**: Verify `functions/signaling.js` exists and is properly deployed
+   - **Test**: Use the test page to verify the function is working
+
+2. **Signaling Function Not Working**
+   - Check that the function file exists in your repository:
+     - `functions/signaling.js` - Unified signaling function
    - Verify the function is deployed by checking the Functions tab in Pages
    - Check browser console for CORS errors
+   - Test the signaling endpoints using the test page
 
-2. **WebRTC Connection Fails**
+3. **WebRTC Connection Fails**
    - Ensure both clients are using HTTPS
    - Check STUN server configuration
    - Verify signaling data is being exchanged (check network tab)
+   - Test signaling endpoints individually
 
-3. **File Transfer Issues**
+4. **File Transfer Issues**
    - Check browser console for chunk transfer errors
    - Verify data channel is properly established
    - Test with smaller files first

@@ -1,5 +1,5 @@
 // Cloudflare Pages Function for WebRTC signaling
-// Handles offer, answer, and candidate exchange for peer-to-peer connections
+// Unified handler for offer, answer, and cleanup operations
 
 // In-memory storage for signaling data
 // In production, you might want to use KV storage or Durable Objects for persistence
@@ -8,7 +8,7 @@ const signalingData = new Map();
 // CORS headers for cross-origin requests
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Content-Type': 'application/json'
 };
@@ -46,32 +46,56 @@ export async function onRequest(context) {
     });
   }
 
+  // Only allow POST requests
+  if (method !== 'POST') {
+    return new Response(JSON.stringify({ 
+      error: 'Method not allowed',
+      message: 'Only POST requests are allowed',
+      method: method,
+      allowed: ['POST', 'OPTIONS']
+    }), {
+      status: 405,
+      headers: corsHeaders
+    });
+  }
+
   try {
     // Clean up expired data on each request
     cleanupExpiredData();
 
-    // Route based on path
-    if (path === '/signaling/offer' && method === 'POST') {
-      return handleOfferSubmission(request);
-    } else if (path === '/signaling/offer' && method === 'GET') {
-      return handleOfferRetrieval(request);
-    } else if (path === '/signaling/answer' && method === 'POST') {
-      return handleAnswerSubmission(request);
-    } else if (path === '/signaling/answer' && method === 'GET') {
-      return handleAnswerRetrieval(request);
-    } else if (path === '/signaling/candidate' && method === 'POST') {
-      return handleCandidateSubmission(request);
-    } else if (path === '/signaling/cleanup' && method === 'POST') {
-      return handleCleanup(request);
-    } else {
+    // Parse the request body
+    const body = await request.json();
+    const { type, peerId, data } = body;
+
+    console.log(`Signaling request: type=${type}, peerId=${peerId}`);
+
+    // Validate required fields
+    if (!type) {
       return new Response(JSON.stringify({ 
-        error: 'Not found',
-        path: path,
-        method: method
+        error: 'Missing required field: type',
+        message: 'Request must include a type field'
       }), {
-        status: 404,
+        status: 400,
         headers: corsHeaders
       });
+    }
+
+    // Route based on type
+    switch (type) {
+      case 'offer':
+        return handleOffer(peerId, data);
+      case 'answer':
+        return handleAnswer(peerId, data);
+      case 'cleanup':
+        return handleCleanup(peerId);
+      default:
+        return new Response(JSON.stringify({ 
+          error: 'Invalid type',
+          message: `Unknown type: ${type}. Valid types are: offer, answer, cleanup`
+        }), {
+          status: 400,
+          headers: corsHeaders
+        });
     }
   } catch (error) {
     console.error('Signaling function error:', error);
@@ -85,311 +109,113 @@ export async function onRequest(context) {
   }
 }
 
-// Handle offer submission
-async function handleOfferSubmission(request) {
-  try {
-    const body = await request.json();
-    const { peerId, sdp } = body;
-
-    console.log(`Offer submission: peerId=${peerId}, sdp length=${sdp ? sdp.length : 0}`);
-
-    if (!peerId || !sdp) {
-      return new Response(JSON.stringify({ 
-        error: 'Missing required fields: peerId, sdp' 
-      }), {
-        status: 400,
-        headers: corsHeaders
-      });
-    }
-
-    const key = getSignalingKey(peerId, 'offer');
-    signalingData.set(key, {
-      peerId,
-      type: 'offer',
-      sdp,
-      timestamp: Date.now()
-    });
-
-    console.log(`Stored offer for peerId: ${peerId}`);
-    
+// Handle offer storage
+function handleOffer(peerId, sdp) {
+  if (!peerId || !sdp) {
     return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Offer stored successfully' 
+      error: 'Missing required fields',
+      message: 'peerId and data (SDP) are required for offer type'
     }), {
-      status: 200,
-      headers: corsHeaders
-    });
-  } catch (error) {
-    console.error('Error handling offer submission:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Failed to process offer',
-      message: error.message 
-    }), {
-      status: 500,
+      status: 400,
       headers: corsHeaders
     });
   }
+
+  const key = getSignalingKey(peerId, 'offer');
+  signalingData.set(key, {
+    peerId,
+    type: 'offer',
+    sdp,
+    timestamp: Date.now()
+  });
+
+  console.log(`Stored offer for peerId: ${peerId}`);
+  
+  return new Response(JSON.stringify({ 
+    success: true, 
+    message: 'Offer stored successfully',
+    type: 'offer',
+    peerId: peerId
+  }), {
+    status: 200,
+    headers: corsHeaders
+  });
 }
 
-// Handle answer submission
-async function handleAnswerSubmission(request) {
-  try {
-    const body = await request.json();
-    const { peerId, sdp } = body;
-
-    console.log(`Answer submission: peerId=${peerId}, sdp length=${sdp ? sdp.length : 0}`);
-
-    if (!peerId || !sdp) {
-      return new Response(JSON.stringify({ 
-        error: 'Missing required fields: peerId, sdp' 
-      }), {
-        status: 400,
-        headers: corsHeaders
-      });
-    }
-
-    const key = getSignalingKey(peerId, 'answer');
-    signalingData.set(key, {
-      peerId,
-      type: 'answer',
-      sdp,
-      timestamp: Date.now()
-    });
-
-    console.log(`Stored answer for peerId: ${peerId}`);
-    
+// Handle answer storage
+function handleAnswer(peerId, sdp) {
+  if (!peerId || !sdp) {
     return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Answer stored successfully' 
+      error: 'Missing required fields',
+      message: 'peerId and data (SDP) are required for answer type'
     }), {
-      status: 200,
-      headers: corsHeaders
-    });
-  } catch (error) {
-    console.error('Error handling answer submission:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Failed to process answer',
-      message: error.message 
-    }), {
-      status: 500,
+      status: 400,
       headers: corsHeaders
     });
   }
+
+  const key = getSignalingKey(peerId, 'answer');
+  signalingData.set(key, {
+    peerId,
+    type: 'answer',
+    sdp,
+    timestamp: Date.now()
+  });
+
+  console.log(`Stored answer for peerId: ${peerId}`);
+  
+  return new Response(JSON.stringify({ 
+    success: true, 
+    message: 'Answer stored successfully',
+    type: 'answer',
+    peerId: peerId
+  }), {
+    status: 200,
+    headers: corsHeaders
+  });
 }
 
-// Handle ICE candidate submission
-async function handleCandidateSubmission(request) {
-  try {
-    const body = await request.json();
-    const { peerId, candidate } = body;
-
-    if (!peerId || !candidate) {
-      return new Response(JSON.stringify({ 
-        error: 'Missing required fields: peerId, candidate' 
-      }), {
-        status: 400,
-        headers: corsHeaders
-      });
-    }
-
-    const key = getSignalingKey(peerId, 'candidate');
-    const existing = signalingData.get(key);
-    
-    if (existing) {
-      // Append to existing candidates array
-      existing.candidates = existing.candidates || [];
-      existing.candidates.push(candidate);
-    } else {
-      // Create new candidate entry
-      signalingData.set(key, {
-        peerId,
-        type: 'candidate',
-        candidates: [candidate],
-        timestamp: Date.now()
-      });
-    }
-
-    console.log(`Stored candidate for peerId: ${peerId}`);
-    
+// Handle cleanup
+function handleCleanup(peerId) {
+  if (!peerId) {
     return new Response(JSON.stringify({ 
-      success: true, 
-      message: 'Candidate stored successfully' 
+      error: 'Missing required field',
+      message: 'peerId is required for cleanup type'
     }), {
-      status: 200,
-      headers: corsHeaders
-    });
-  } catch (error) {
-    console.error('Error handling candidate submission:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Failed to process candidate',
-      message: error.message 
-    }), {
-      status: 500,
+      status: 400,
       headers: corsHeaders
     });
   }
-}
 
-// Handle offer retrieval
-async function handleOfferRetrieval(request) {
-  try {
-    const url = new URL(request.url);
-    const peerId = url.searchParams.get('peerId');
+  // Remove all signaling data for this peerId
+  const offerKey = getSignalingKey(peerId, 'offer');
+  const answerKey = getSignalingKey(peerId, 'answer');
+  const candidateKey = getSignalingKey(peerId, 'candidate');
 
-    console.log(`Offer retrieval request: peerId=${peerId}`);
-
-    if (!peerId) {
-      return new Response(JSON.stringify({ 
-        error: 'Missing peerId parameter' 
-      }), {
-        status: 400,
-        headers: corsHeaders
-      });
-    }
-
-    const key = getSignalingKey(peerId, 'offer');
-    const offerData = signalingData.get(key);
-
-    if (!offerData) {
-      console.log(`No offer found for peerId: ${peerId}`);
-      return new Response(JSON.stringify({ 
-        found: false,
-        message: 'No offer found for this peerId' 
-      }), {
-        status: 200,
-        headers: corsHeaders
-      });
-    }
-
-    console.log(`Found offer for peerId: ${peerId}`);
-    return new Response(JSON.stringify({ 
-      found: true,
-      peerId: offerData.peerId,
-      sdp: offerData.sdp,
-      timestamp: offerData.timestamp
-    }), {
-      status: 200,
-      headers: corsHeaders
-    });
-  } catch (error) {
-    console.error('Error retrieving offer:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Failed to retrieve offer',
-      message: error.message 
-    }), {
-      status: 500,
-      headers: corsHeaders
-    });
+  let deletedCount = 0;
+  if (signalingData.has(offerKey)) {
+    signalingData.delete(offerKey);
+    deletedCount++;
   }
-}
-
-// Handle answer retrieval
-async function handleAnswerRetrieval(request) {
-  try {
-    const url = new URL(request.url);
-    const peerId = url.searchParams.get('peerId');
-
-    console.log(`Answer retrieval request: peerId=${peerId}`);
-
-    if (!peerId) {
-      return new Response(JSON.stringify({ 
-        error: 'Missing peerId parameter' 
-      }), {
-        status: 400,
-        headers: corsHeaders
-      });
-    }
-
-    const key = getSignalingKey(peerId, 'answer');
-    const answerData = signalingData.get(key);
-
-    if (!answerData) {
-      console.log(`No answer found for peerId: ${peerId}`);
-      return new Response(JSON.stringify({ 
-        found: false,
-        message: 'No answer found for this peerId' 
-      }), {
-        status: 200,
-        headers: corsHeaders
-      });
-    }
-
-    console.log(`Found answer for peerId: ${peerId}`);
-    return new Response(JSON.stringify({ 
-      found: true,
-      peerId: answerData.peerId,
-      sdp: answerData.sdp,
-      timestamp: answerData.timestamp
-    }), {
-      status: 200,
-      headers: corsHeaders
-    });
-  } catch (error) {
-    console.error('Error retrieving answer:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Failed to retrieve answer',
-      message: error.message 
-    }), {
-      status: 500,
-      headers: corsHeaders
-    });
+  if (signalingData.has(answerKey)) {
+    signalingData.delete(answerKey);
+    deletedCount++;
   }
-}
-
-// Handle cleanup of signaling data
-async function handleCleanup(request) {
-  try {
-    const body = await request.json();
-    const { peerId } = body;
-
-    console.log(`Cleanup request: peerId=${peerId}`);
-
-    if (!peerId) {
-      return new Response(JSON.stringify({ 
-        error: 'Missing peerId' 
-      }), {
-        status: 400,
-        headers: corsHeaders
-      });
-    }
-
-    // Remove all signaling data for this peerId
-    const offerKey = getSignalingKey(peerId, 'offer');
-    const answerKey = getSignalingKey(peerId, 'answer');
-    const candidateKey = getSignalingKey(peerId, 'candidate');
-
-    let deletedCount = 0;
-    if (signalingData.has(offerKey)) {
-      signalingData.delete(offerKey);
-      deletedCount++;
-    }
-    if (signalingData.has(answerKey)) {
-      signalingData.delete(answerKey);
-      deletedCount++;
-    }
-    if (signalingData.has(candidateKey)) {
-      signalingData.delete(candidateKey);
-      deletedCount++;
-    }
-
-    console.log(`Cleaned up ${deletedCount} signaling entries for peerId: ${peerId}`);
-    
-    return new Response(JSON.stringify({ 
-      success: true, 
-      message: `Cleaned up ${deletedCount} signaling entries`,
-      deletedCount
-    }), {
-      status: 200,
-      headers: corsHeaders
-    });
-  } catch (error) {
-    console.error('Error during cleanup:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Failed to cleanup signaling data',
-      message: error.message 
-    }), {
-      status: 500,
-      headers: corsHeaders
-    });
+  if (signalingData.has(candidateKey)) {
+    signalingData.delete(candidateKey);
+    deletedCount++;
   }
+
+  console.log(`Cleaned up ${deletedCount} signaling entries for peerId: ${peerId}`);
+  
+  return new Response(JSON.stringify({ 
+    success: true, 
+    message: `Cleaned up ${deletedCount} signaling entries`,
+    type: 'cleanup',
+    peerId: peerId,
+    deletedCount: deletedCount
+  }), {
+    status: 200,
+    headers: corsHeaders
+  });
 }

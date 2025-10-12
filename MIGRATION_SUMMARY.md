@@ -26,24 +26,25 @@ Successfully migrated the WaveLite Chat project from Google Forms to Cloudflare 
 **New File:** `functions/signaling.js`
 
 **Features:**
-- **POST /signaling/offer** - Store WebRTC offers
-- **POST /signaling/answer** - Store WebRTC answers
-- **POST /signaling/candidate** - Store ICE candidates
-- **GET /signaling/offer** - Retrieve offers by peerId
-- **GET /signaling/answer** - Retrieve answers by peerId
-- **POST /signaling/cleanup** - Clean up signaling data
+- **Unified POST endpoint** - Single `/signaling` endpoint for all operations
+- **Type-based routing** - Determines operation from `type` field in JSON body
+- **POST /signaling** with `{ type: "offer", peerId: "X", data: "SDP" }` - Store WebRTC offers
+- **POST /signaling** with `{ type: "answer", peerId: "X", data: "SDP" }` - Store WebRTC answers
+- **POST /signaling** with `{ type: "cleanup", peerId: "X" }` - Clean up signaling data
+- **405 Method Not Allowed** - Returns 405 for non-POST requests
+- **400 Bad Request** - Returns 400 for invalid type values
 - **Automatic cleanup** - Data expires after 5 minutes
 - **CORS support** - Proper cross-origin headers
-- **Error handling** - Comprehensive error responses
-- **Single function architecture** - All endpoints handled in one function for better reliability
+- **Error handling** - Comprehensive error responses with consistent JSON format
 
 ### 3. Updated Frontend JavaScript
 
 **Key Changes in `script.js`:**
-- Replaced Google Forms URLs with Cloudflare Pages Function endpoints
-- Updated `submitSDP()` to use JSON API instead of FormData
-- Updated `fetchSDP()` to use GET requests with query parameters
-- Updated `deletePeerFromSheet()` to use JSON API
+- Replaced Google Forms URLs with unified Cloudflare Pages Function endpoint
+- Updated `submitSDP()` to use unified POST endpoint with type-based routing
+- Updated `fetchSDP()` to work with polling mechanism (returns null for compatibility)
+- Updated `deletePeerFromSheet()` to use unified cleanup endpoint
+- All requests now use `{ type: "operation", peerId: "X", data: "SDP" }` format
 - Improved error handling with proper HTTP status codes
 
 ### 4. Added Testing and Documentation
@@ -79,44 +80,66 @@ Successfully migrated the WaveLite Chat project from Google Forms to Cloudflare 
 
 | Method | Endpoint | Purpose |
 |--------|----------|---------|
-| POST | `/signaling/offer` | Store WebRTC offer |
-| POST | `/signaling/answer` | Store WebRTC answer |
-| POST | `/signaling/candidate` | Store ICE candidate |
-| GET | `/signaling/offer?peerId=X` | Retrieve offer |
-| GET | `/signaling/answer?peerId=X` | Retrieve answer |
-| POST | `/signaling/cleanup` | Clean up data |
+| POST | `/signaling` | Store WebRTC offer (type: "offer") |
+| POST | `/signaling` | Store WebRTC answer (type: "answer") |
+| POST | `/signaling` | Clean up data (type: "cleanup") |
 
 ### Request/Response Format
 
-**Store Offer/Answer:**
+**Store Offer:**
 ```json
 // Request
+POST /signaling
 {
+  "type": "offer",
   "peerId": "peer123",
-  "sdp": "v=0\r\no=- 1234567890..."
+  "data": "v=0\r\no=- 1234567890..."
 }
 
 // Response
 {
   "success": true,
-  "message": "Offer stored successfully"
+  "message": "Offer stored successfully",
+  "type": "offer",
+  "peerId": "peer123"
 }
 ```
 
-**Retrieve Offer/Answer:**
+**Store Answer:**
 ```json
-// Response (found)
+// Request
+POST /signaling
 {
-  "found": true,
+  "type": "answer",
   "peerId": "peer123",
-  "sdp": "v=0\r\no=- 1234567890...",
-  "timestamp": 1234567890
+  "data": "v=0\r\no=- 1234567890..."
 }
 
-// Response (not found)
+// Response
 {
-  "found": false,
-  "message": "No offer found for this peerId"
+  "success": true,
+  "message": "Answer stored successfully",
+  "type": "answer",
+  "peerId": "peer123"
+}
+```
+
+**Cleanup:**
+```json
+// Request
+POST /signaling
+{
+  "type": "cleanup",
+  "peerId": "peer123"
+}
+
+// Response
+{
+  "success": true,
+  "message": "Cleaned up 2 signaling entries",
+  "type": "cleanup",
+  "peerId": "peer123",
+  "deletedCount": 2
 }
 ```
 
