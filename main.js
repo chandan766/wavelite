@@ -1,5 +1,5 @@
  $(document).ready(function () {
-      // STUN server collapse toggle
+
       $('#stunServerCollapse').on('shown.bs.collapse', () => {
         $('#stunToggleIcon').removeClass('fa-chevron-down').addClass('fa-chevron-up');
       });

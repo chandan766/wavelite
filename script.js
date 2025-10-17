@@ -1,9 +1,6 @@
 // --- Config ---
 // Cloudflare Pages Function endpoint for WebRTC signaling
-const SIGNALING_URL = '/functions/signaling';
-
-// Fallback to local storage for development if signaling server is not available
-const USE_LOCAL_FALLBACK = false; // Set to true for development without server
+const SIGNALING_URL = '/signaling';
 
 let localConnection, dataChannel;
 let pollingInterval;
@@ -31,225 +28,13 @@ let retryCounts = new Map(); // Track retries per messageId
 let activeTransfers = new Map(); // Store file references for resending
 const receivedTransfers = new Map(); // messageId → { fileInfo, buffers, receivedBytes }
 
-// Modern UI functionality
-let currentTheme = localStorage.getItem('theme') || 'light';
-let isTyping = false;
-let typingTimeout = null;
-
-// Initialize theme
-function initializeTheme() {
-  document.documentElement.setAttribute('data-theme', currentTheme);
-  const themeIcon = document.getElementById('themeIcon');
-  if (themeIcon) {
-    themeIcon.className = currentTheme === 'dark' ? 'fas fa-sun' : 'fas fa-moon';
-  }
-}
-
-// Theme toggle functionality
-function toggleTheme() {
-  currentTheme = currentTheme === 'light' ? 'dark' : 'light';
-  localStorage.setItem('theme', currentTheme);
-  initializeTheme();
-}
-
-// Initialize typing indicator
-function startTypingIndicator() {
-  if (!isTyping && dataChannel && dataChannel.readyState === 'open') {
-    isTyping = true;
-    dataChannel.send(JSON.stringify({ type: 'typing', isTyping: true }));
-  }
-  clearTimeout(typingTimeout);
-  typingTimeout = setTimeout(stopTypingIndicator, 1000);
-}
-
-function stopTypingIndicator() {
-  if (isTyping && dataChannel && dataChannel.readyState === 'open') {
-    isTyping = false;
-    dataChannel.send(JSON.stringify({ type: 'typing', isTyping: false }));
-  }
-}
-
-// Enhanced message display with animations
-function displayMessage(name, content, isSelf, type, file, messageId, status, fileType = null, fileSize = null) {
-  const alignClass = isSelf ? 'self' : 'other';
-  const statusIcon = isSelf ? getStatusIcon(status) : '';
-  const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  
-  let messageContent = content;
-  if (type === 'text') {
-    messageContent = formatTextMsg(content);
-  } else if (type === 'file' && file) {
-    messageContent = createFileMessage(file, content, fileType, fileSize);
-  }
-  
-  const messageHtml = `
-    <div class="message ${alignClass} animate__animated animate__fadeInUp">
-      <div class="message-avatar">
-        <i class="fas fa-user"></i>
-      </div>
-      <div class="message-content">
-        <div class="message-bubble">
-          <div class="message-text">${messageContent}</div>
-        </div>
-        <div class="message-meta">
-          <span class="message-time">${timestamp}</span>
-          ${statusIcon}
-        </div>
-      </div>
-    </div>
-  `;
-  
-  // Remove welcome message if it exists
-  const welcomeMessage = document.querySelector('.welcome-message');
-  if (welcomeMessage) {
-    welcomeMessage.remove();
-  }
-  
-  $('#chat-display').append(messageHtml);
-  scrollToBottom();
-}
-
-function getStatusIcon(status) {
-  switch (status) {
-    case 'sent':
-      return '<span class="status-icon"><i class="fas fa-check"></i></span>';
-    case 'delivered':
-      return '<span class="status-icon delivered"><i class="fas fa-check-double"></i></span>';
-    case 'read':
-      return '<span class="status-icon read"><i class="fas fa-check-double"></i></span>';
-    default:
-      return '';
-  }
-}
-
-function createFileMessage(file, content, fileType, fileSize) {
-  const isImage = fileType && fileType.startsWith('image/');
-  const isAudio = fileType && fileType.startsWith('audio/');
-  const isVideo = fileType && fileType.startsWith('video/');
-  
-  if (isImage) {
-    return `
-      <div class="file-message">
-        <img src="${file}" alt="${content}" class="file-preview" onclick="showImagePreview('${file}', '${content}')">
-        <div class="file-info">
-          <div class="file-name">${content}</div>
-          <div class="file-size">${formatBytes(fileSize)}</div>
-        </div>
-      </div>
-    `;
-  } else if (isVideo) {
-    return `
-      <div class="file-message">
-        <video controls class="file-preview">
-          <source src="${file}" type="${fileType}">
-        </video>
-        <div class="file-info">
-          <div class="file-name">${content}</div>
-          <div class="file-size">${formatBytes(fileSize)}</div>
-        </div>
-      </div>
-    `;
-  } else if (isAudio) {
-    return `
-      <div class="file-message">
-        <audio controls class="file-preview">
-          <source src="${file}" type="${fileType}">
-        </audio>
-        <div class="file-info">
-          <div class="file-name">${content}</div>
-          <div class="file-size">${formatBytes(fileSize)}</div>
-        </div>
-      </div>
-    `;
-  } else {
-    return `
-      <div class="file-message">
-        <div class="file-icon">
-          <i class="fas fa-file"></i>
-        </div>
-        <div class="file-info">
-          <div class="file-name">${content}</div>
-          <div class="file-size">${formatBytes(fileSize)}</div>
-        </div>
-        <a href="${file}" download="${content}" class="download-btn">
-          <i class="fas fa-download"></i>
-        </a>
-      </div>
-    `;
-  }
-}
-
-function scrollToBottom() {
-  const messagesContainer = document.getElementById('chat-display');
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
-}
-
-$(document).ready(async () => {
-  // Initialize theme
-  initializeTheme();
-  
-  // Test signaling server connectivity
-  const serverAvailable = await testSignalingServer();
-  if (!serverAvailable) {
-    console.warn(`⚠️ Signaling server may not be available. Some features may not work properly.`);
-  }
-  
-  // Theme toggle event
-  $('#themeToggle').click(toggleTheme);
-  
-  // Initialize saved data
+$(document).ready(() => {
   let savedProfilePeerId = localStorage.getItem("peerIds") || "";
   let savedProfilePeerName = localStorage.getItem("peerName") || "";
   if (savedProfilePeerName) {
     $("#chat-username").val(savedProfilePeerName);
     $("#peer-id").val(savedProfilePeerId);
   }
-  
-  // Typing indicator
-  $('#chat-message').on('input', startTypingIndicator);
-  
-  // Close attachment menu when clicking outside
-  $(document).on('click', function(e) {
-    if (!$(e.target).closest('#attachment-menu, #btn-toggle').length) {
-      $('#attachment-menu').addClass('d-none');
-    }
-  });
-  
-  // Close attachment menu button
-  $('#closeAttachmentMenu').click(() => {
-    $('#attachment-menu').addClass('d-none');
-  });
-  
-  // Mobile menu functionality
-  $('#mobileMenuBtn').click(() => {
-    $('.sidebar').addClass('mobile-open');
-    $('#sidebarOverlay').addClass('active');
-    $('body').addClass('sidebar-open');
-  });
-  
-  $('#sidebarOverlay').click(() => {
-    closeMobileSidebar();
-  });
-  
-  // Close mobile sidebar when clicking outside or on contact items
-  $(document).on('click', '.contact-item', () => {
-    if (window.innerWidth <= 768) {
-      closeMobileSidebar();
-    }
-  });
-  
-  function closeMobileSidebar() {
-    $('.sidebar').removeClass('mobile-open');
-    $('#sidebarOverlay').removeClass('active');
-    $('body').removeClass('sidebar-open');
-  }
-  
-  // Handle window resize
-  $(window).resize(() => {
-    if (window.innerWidth > 768) {
-      closeMobileSidebar();
-    }
-  });
 
   $("#peerIdSubmit").click(async function (e) {
     e.preventDefault(); // prevent form default submission
@@ -659,7 +444,8 @@ async function setupOfferer(peerId) {
       if (elapsed > CONNECTION_TIMEOUT) {
         console.log(`⏰ Connection timeout reached (${CONNECTION_TIMEOUT/1000}s), stopping polling`);
         clearInterval(pollingInterval);
-        resetConnectionUI();
+        $("#peerIdSubmit").prop("disabled", false).text("Connect");
+        $("#joinPeer").prop("disabled", false).text("Join");
         showAlert("Connection timed out. Please try again or check peer ID.");
         $("#delete-all-btn").click();
         return;
@@ -696,7 +482,8 @@ async function setupOfferer(peerId) {
     }, 4000); // Polling interval 4 seconds
   } catch (error) {
     console.error("Error setting up offerer:", error);
-    resetConnectionUI();
+    $("#peerIdSubmit").prop("disabled", false).text("Connect");
+    $("#joinPeer").prop("disabled", false).text("Join");
     showAlert("Failed to establish connection. Please try again.");
   }
 }
@@ -757,7 +544,8 @@ async function setupAnswerer(offerEntry) {
     cleanupSignalingData(offerEntry.peerId, "offer");
   } catch (error) {
     console.error("❌ Error setting up answerer:", error);
-    resetConnectionUI();
+    $("#peerIdSubmit").prop("disabled", false).text("Connect");
+    $("#joinPeer").prop("disabled", false).text("Join");
     showAlert("Failed to establish connection. Please try again.");
   }
 }
@@ -808,7 +596,6 @@ async function submitSDP(peerId, role, sdp) {
   try {
     console.log(`📤 Submitting ${role} SDP for peerId: ${peerId}`);
     console.log(`📦 SDP data: ${sdp.substring(0, 100)}...`);
-    console.log(`🌐 Request URL: ${SIGNALING_URL}`);
     
     const response = await fetch(SIGNALING_URL, {
       method: "POST",
@@ -820,21 +607,8 @@ async function submitSDP(peerId, role, sdp) {
       }),
     });
     
-    console.log(`📡 Response status: ${response.status} ${response.statusText}`);
-    console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
-    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ HTTP error response:`, errorText);
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText.substring(0, 200)}`);
-    }
-    
-    // Check if response is JSON
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const responseText = await response.text();
-      console.error(`❌ Non-JSON response received:`, responseText.substring(0, 500));
-      throw new Error(`Expected JSON response but got: ${contentType}. Response: ${responseText.substring(0, 200)}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     const result = await response.json();
@@ -843,16 +617,6 @@ async function submitSDP(peerId, role, sdp) {
     
   } catch (error) {
     console.error(`❌ Error submitting ${role} SDP:`, error);
-    
-    // Show user-friendly error message
-    if (error.message.includes('<!DOCTYPE')) {
-      showAlert("Signaling server error. Please check if the server is running properly.", true);
-    } else if (error.message.includes('Failed to fetch')) {
-      showAlert("Cannot connect to signaling server. Please check your internet connection.", true);
-    } else {
-      showAlert(`Connection error: ${error.message}`, true);
-    }
-    
     throw error;
   }
 }
@@ -862,28 +626,14 @@ async function fetchSDP(peerId, role) {
     console.log(`📥 Fetching ${role} SDP for peerId: ${peerId}`);
     
     const url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&peerId=${encodeURIComponent(peerId)}`;
-    console.log(`🌐 Request URL: ${url}`);
     
     const response = await fetch(url, {
       method: "GET",
       headers: { 'Content-Type': 'application/json' },
     });
     
-    console.log(`📡 Response status: ${response.status} ${response.statusText}`);
-    console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
-    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ HTTP error response:`, errorText);
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText.substring(0, 200)}`);
-    }
-    
-    // Check if response is JSON
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const responseText = await response.text();
-      console.error(`❌ Non-JSON response received:`, responseText.substring(0, 500));
-      throw new Error(`Expected JSON response but got: ${contentType}. Response: ${responseText.substring(0, 200)}`);
+      throw new Error(`HTTP error! status: ${response.status}`);
     }
     
     const result = await response.json();
@@ -909,16 +659,6 @@ async function fetchSDP(peerId, role) {
     }
   } catch (e) {
     console.error(`❌ Failed to fetch ${role} SDP for peerId: ${peerId}:`, e);
-    
-    // Show user-friendly error message
-    if (e.message.includes('<!DOCTYPE')) {
-      showAlert("Signaling server error. Please check if the server is running properly.", true);
-    } else if (e.message.includes('Failed to fetch')) {
-      showAlert("Cannot connect to signaling server. Please check your internet connection.", true);
-    } else {
-      showAlert(`Connection error: ${e.message}`, true);
-    }
-    
     return null;
   }
 }
@@ -1111,15 +851,7 @@ function setupDataChannel() {
           ).toLocaleTimeString()}`
         );
         $("#status").text("Online");
-        $("#chatPeerStatus").text("Online");
-        $(".status-indicator").removeClass("offline").addClass("online");
         lastPingReceivedTime = Date.now();
-      } else if (msg.type === "typing") {
-        if (msg.isTyping) {
-          $("#chatPeerStatus").text("Typing...");
-        } else {
-          $("#chatPeerStatus").text("Online");
-        }
       }
     }
   };
@@ -1563,23 +1295,9 @@ function showQueuedProgress(fakeId, fileName) {
 function transitionToChat() {
   $("#ai-btn").addClass("d-none");
   if ($("#chat-section").hasClass("d-none")) {
-    $("#login-section").addClass("d-none");
+    $("#login-section").removeClass("d-flex").addClass("d-none");
     $("#chat-section").removeClass("d-none");
     $("#peerIdSubmit").prop("disabled", false).text("Disconnect");
-    
-    // Update peer contact info
-    const peerName = $("#chat-username").val() || "Anonymous";
-    $("#peerContactName").text(peerName);
-    $("#chatPeerName").text(peerName);
-    
-    // Update user info in sidebar
-    $("#headerBtnName").text(peerName);
-    
-    // Update contact status
-    $(".status-indicator").removeClass("offline").addClass("online");
-    $("#status").text("Online");
-    $("#chatPeerStatus").text("Online");
-    
     console.log("Transitioned to chat UI");
   }
 }
@@ -1798,7 +1516,8 @@ async function startJoinConnection(peerId) {
     if (elapsed > CONNECTION_TIMEOUT) {
       console.log(`⏰ Connection timeout reached (${CONNECTION_TIMEOUT/1000}s), stopping polling`);
       clearInterval(pollingInterval);
-      resetConnectionUI();
+      $("#joinPeer").prop("disabled", false).text("Join");
+      $("#peerIdSubmit").prop("disabled", false).text("Connect");
       showAlert("No offer found. Please try again or check peer ID.");
       return;
     }
@@ -1819,7 +1538,8 @@ async function startJoinConnection(peerId) {
         console.log(`🎉 Join connection completed successfully!`);
       } catch (error) {
         console.error("❌ Error during join connection:", error);
-        resetConnectionUI();
+        $("#joinPeer").prop("disabled", false).text("Join");
+        $("#peerIdSubmit").prop("disabled", false).text("Connect");
         showAlert("Failed to join connection. Please try again.");
       }
     } else {
@@ -1855,112 +1575,32 @@ function updateConnectionStatus(message, percent, isFinal = false) {
 }
 
 function showAlert(message, isError = true) {
-  // Remove any existing alerts first
-  $('.custom-alert').remove();
-  
-  // Determine the alert type and styling
-  const alertType = isError ? 'error' : 'success';
-  const iconClass = isError ? 'fas fa-exclamation-circle' : 'fas fa-check-circle';
-  
-  // Create the alert element with modern styling
+  // Determine the alert type
+  const alertType = isError ? "alert-danger" : "alert-success";
+
+  // Create the alert element
   const alert = $(`
-    <div class="custom-alert custom-alert-${alertType} animate__animated animate__fadeInDown" role="alert">
-      <div class="alert-content">
-        <div class="alert-icon">
-          <i class="${iconClass}"></i>
-        </div>
-        <div class="alert-message">
-          ${message}
-        </div>
-        <button type="button" class="alert-close" aria-label="Close">
-          <i class="fas fa-times"></i>
-        </button>
+      <div class="alert custom-alert ${alertType} alert-dismissible fade show fixed-top d-flex align-items-center rounded-pill" role="alert" style="top: 10px; left: 50%; transform: translateX(-50%); z-index: 2000;">
+        <span class="${
+          isError ? "text-danger" : "text-success"
+        }">${message}</span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
-      <div class="alert-progress">
-        <div class="alert-progress-bar"></div>
-      </div>
-    </div>
-  `);
+    `);
 
   // Append the alert to the body
   $("body").append(alert);
 
-  // Start progress bar animation
-  const progressBar = alert.find('.alert-progress-bar');
-  setTimeout(() => {
-    progressBar.css('width', '100%');
-  }, 50);
-
-  // Handle close button click
-  alert.find('.alert-close').click(() => {
-    alert.addClass('animate__fadeOutUp');
-    setTimeout(() => alert.remove(), 300);
-  });
-
   // Auto fade out after 4 seconds
   setTimeout(function () {
-    if (alert.length) {
-      alert.addClass('animate__fadeOutUp');
-      setTimeout(() => alert.remove(), 300);
-    }
+    alert.fadeOut(1000, function () {
+      $(this).remove(); // Remove the alert after fade out
+    });
   }, 4000);
 }
 function truncateName(name, len = 10) {
   name = name.trim();
   return name.length > len ? name.slice(0, len - 3) + "..." : name;
-}
-
-// Test function for custom alerts (can be called from browser console)
-function testAlerts() {
-  showAlert("This is a success message!", false);
-  setTimeout(() => {
-    showAlert("This is an error message!", true);
-  }, 2000);
-}
-
-// Test function for signaling server (can be called from browser console)
-async function testSignaling() {
-  console.log("🧪 Testing signaling server...");
-  const isAvailable = await testSignalingServer();
-  if (isAvailable) {
-    showAlert("Signaling server is working properly!", false);
-  } else {
-    showAlert("Signaling server is not responding correctly!", true);
-  }
-  return isAvailable;
-}
-
-// Function to reset UI state when connection fails
-function resetConnectionUI() {
-  $("#peerIdSubmit").prop("disabled", false).text("Connect");
-  $("#joinPeer").prop("disabled", false).text("Join");
-  $("#peerBtnGroup").removeClass("d-none").addClass("d-flex");
-  $("#connectionStatusPanel").addClass("d-none");
-  $("#chat-username").prop("disabled", false);
-  $("#peer-id").prop("disabled", false);
-}
-
-// Function to test signaling server connectivity
-async function testSignalingServer() {
-  try {
-    console.log(`🔍 Testing signaling server connectivity...`);
-    const response = await fetch(SIGNALING_URL, {
-      method: "GET",
-      headers: { 'Content-Type': 'application/json' },
-    });
-    
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      console.log(`✅ Signaling server is responding with JSON`);
-      return true;
-    } else {
-      console.log(`❌ Signaling server is not responding with JSON (got: ${contentType})`);
-      return false;
-    }
-  } catch (error) {
-    console.log(`❌ Signaling server test failed:`, error);
-    return false;
-  }
 }
 
 function togglePlayPause(containerId) {
@@ -2178,33 +1818,9 @@ function formatBytes(sizeInBytes) {
   return `${size < 10 ? size.toFixed(1) : Math.round(size)} ${units[i]}`;
 }
 
-// Enhanced Image Preview Modal Functions
-function showImagePreview(imageSrc, filename) {
-  // Create modal if it doesn't exist
-  let modal = document.getElementById('imagePreviewModal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'imagePreviewModal';
-    modal.className = 'image-preview-modal d-none';
-    modal.innerHTML = `
-      <div class="image-preview-container">
-        <div class="image-preview-header">
-          <div class="image-preview-filename" id="imagePreviewFilename"></div>
-          <button class="image-preview-close" id="imagePreviewClose">
-            <i class="fas fa-times"></i>
-          </button>
-        </div>
-        <img id="imagePreviewImg" class="image-preview-img" alt="Preview">
-        <div class="image-preview-actions">
-          <button id="imagePreviewDownload" class="btn btn-primary">
-            <i class="fas fa-download me-2"></i>Download
-          </button>
-        </div>
-      </div>
-    `;
-    document.body.appendChild(modal);
-  }
-  
+// Image Preview Modal Functions
+function showImagePreview(imageSrc, filename, filesize) {
+  const modal = document.getElementById('imagePreviewModal');
   const img = document.getElementById('imagePreviewImg');
   const filenameEl = document.getElementById('imagePreviewFilename');
   
@@ -2216,29 +1832,28 @@ function showImagePreview(imageSrc, filename) {
   modal.setAttribute('data-current-filename', filename || 'Image');
   
   modal.classList.remove('d-none');
-  document.body.style.overflow = 'hidden';
+  document.body.style.overflow = 'hidden'; // Prevent background scrolling
 }
 
 function hideImagePreview() {
   const modal = document.getElementById('imagePreviewModal');
-  if (modal) {
-    modal.classList.add('d-none');
-    document.body.style.overflow = '';
-  }
+  modal.classList.add('d-none');
+  document.body.style.overflow = ''; // Restore scrolling
 }
 
 // Download image function
 function downloadImage() {
   const modal = document.getElementById('imagePreviewModal');
-  if (!modal) return;
-  
   const imageSrc = modal.getAttribute('data-current-src');
   const filename = modal.getAttribute('data-current-filename');
   
   if (imageSrc) {
+    // Create a temporary link element
     const link = document.createElement('a');
     link.href = imageSrc;
     link.download = filename || 'image';
+    
+    // Trigger the download
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
