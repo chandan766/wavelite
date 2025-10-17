@@ -2,6 +2,9 @@
 // Cloudflare Pages Function endpoint for WebRTC signaling
 const SIGNALING_URL = '/functions/signaling';
 
+// Fallback to local storage for development if signaling server is not available
+const USE_LOCAL_FALLBACK = false; // Set to true for development without server
+
 let localConnection, dataChannel;
 let pollingInterval;
 let isManuallyConnecting = false;
@@ -181,9 +184,15 @@ function scrollToBottom() {
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-$(document).ready(() => {
+$(document).ready(async () => {
   // Initialize theme
   initializeTheme();
+  
+  // Test signaling server connectivity
+  const serverAvailable = await testSignalingServer();
+  if (!serverAvailable) {
+    console.warn(`⚠️ Signaling server may not be available. Some features may not work properly.`);
+  }
   
   // Theme toggle event
   $('#themeToggle').click(toggleTheme);
@@ -799,6 +808,7 @@ async function submitSDP(peerId, role, sdp) {
   try {
     console.log(`📤 Submitting ${role} SDP for peerId: ${peerId}`);
     console.log(`📦 SDP data: ${sdp.substring(0, 100)}...`);
+    console.log(`🌐 Request URL: ${SIGNALING_URL}`);
     
     const response = await fetch(SIGNALING_URL, {
       method: "POST",
@@ -810,8 +820,21 @@ async function submitSDP(peerId, role, sdp) {
       }),
     });
     
+    console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+    console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
+    
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`❌ HTTP error response:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText.substring(0, 200)}`);
+    }
+    
+    // Check if response is JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const responseText = await response.text();
+      console.error(`❌ Non-JSON response received:`, responseText.substring(0, 500));
+      throw new Error(`Expected JSON response but got: ${contentType}. Response: ${responseText.substring(0, 200)}`);
     }
     
     const result = await response.json();
@@ -820,6 +843,16 @@ async function submitSDP(peerId, role, sdp) {
     
   } catch (error) {
     console.error(`❌ Error submitting ${role} SDP:`, error);
+    
+    // Show user-friendly error message
+    if (error.message.includes('<!DOCTYPE')) {
+      showAlert("Signaling server error. Please check if the server is running properly.", true);
+    } else if (error.message.includes('Failed to fetch')) {
+      showAlert("Cannot connect to signaling server. Please check your internet connection.", true);
+    } else {
+      showAlert(`Connection error: ${error.message}`, true);
+    }
+    
     throw error;
   }
 }
@@ -829,14 +862,28 @@ async function fetchSDP(peerId, role) {
     console.log(`📥 Fetching ${role} SDP for peerId: ${peerId}`);
     
     const url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&peerId=${encodeURIComponent(peerId)}`;
+    console.log(`🌐 Request URL: ${url}`);
     
     const response = await fetch(url, {
       method: "GET",
       headers: { 'Content-Type': 'application/json' },
     });
     
+    console.log(`📡 Response status: ${response.status} ${response.statusText}`);
+    console.log(`📡 Response headers:`, Object.fromEntries(response.headers.entries()));
+    
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error(`❌ HTTP error response:`, errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText.substring(0, 200)}`);
+    }
+    
+    // Check if response is JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const responseText = await response.text();
+      console.error(`❌ Non-JSON response received:`, responseText.substring(0, 500));
+      throw new Error(`Expected JSON response but got: ${contentType}. Response: ${responseText.substring(0, 200)}`);
     }
     
     const result = await response.json();
@@ -862,6 +909,16 @@ async function fetchSDP(peerId, role) {
     }
   } catch (e) {
     console.error(`❌ Failed to fetch ${role} SDP for peerId: ${peerId}:`, e);
+    
+    // Show user-friendly error message
+    if (e.message.includes('<!DOCTYPE')) {
+      showAlert("Signaling server error. Please check if the server is running properly.", true);
+    } else if (e.message.includes('Failed to fetch')) {
+      showAlert("Cannot connect to signaling server. Please check your internet connection.", true);
+    } else {
+      showAlert(`Connection error: ${e.message}`, true);
+    }
+    
     return null;
   }
 }
@@ -1861,6 +1918,18 @@ function testAlerts() {
   }, 2000);
 }
 
+// Test function for signaling server (can be called from browser console)
+async function testSignaling() {
+  console.log("🧪 Testing signaling server...");
+  const isAvailable = await testSignalingServer();
+  if (isAvailable) {
+    showAlert("Signaling server is working properly!", false);
+  } else {
+    showAlert("Signaling server is not responding correctly!", true);
+  }
+  return isAvailable;
+}
+
 // Function to reset UI state when connection fails
 function resetConnectionUI() {
   $("#peerIdSubmit").prop("disabled", false).text("Connect");
@@ -1869,6 +1938,29 @@ function resetConnectionUI() {
   $("#connectionStatusPanel").addClass("d-none");
   $("#chat-username").prop("disabled", false);
   $("#peer-id").prop("disabled", false);
+}
+
+// Function to test signaling server connectivity
+async function testSignalingServer() {
+  try {
+    console.log(`🔍 Testing signaling server connectivity...`);
+    const response = await fetch(SIGNALING_URL, {
+      method: "GET",
+      headers: { 'Content-Type': 'application/json' },
+    });
+    
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/json')) {
+      console.log(`✅ Signaling server is responding with JSON`);
+      return true;
+    } else {
+      console.log(`❌ Signaling server is not responding with JSON (got: ${contentType})`);
+      return false;
+    }
+  } catch (error) {
+    console.log(`❌ Signaling server test failed:`, error);
+    return false;
+  }
 }
 
 function togglePlayPause(containerId) {
