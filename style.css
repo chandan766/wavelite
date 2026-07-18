@@ -796,7 +796,7 @@ img { max-width: 100%; height: auto; }
 
 .chat-message.other {
   align-self: flex-start;
-  background: var(--wl-surface);
+  background: var(--wl-ice);
   color: var(--wl-text);
   border: 1px solid var(--wl-border-subtle);
   border-bottom-left-radius: 6px;
@@ -851,6 +851,34 @@ img { max-width: 100%; height: auto; }
 }
 
 .chat-message.self .status-icon { color: rgba(255, 255, 255, 0.7); }
+
+/* File download — icon only, right-aligned */
+.chat-message a[download] {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 36px !important;
+  height: 36px !important;
+  padding: 0 !important;
+  margin: 4px 0 0 auto !important;
+  border-radius: 10px !important;
+  border: none !important;
+  font-size: 0;
+  line-height: 0;
+  background: rgba(255,255,255,0.2) !important;
+  color: white !important;
+  transition: background 0.2s var(--wl-ease);
+}
+.chat-message a[download] i {
+  font-size: 1rem !important;
+  margin: 0 !important;
+}
+.chat-message a[download]:hover { background: rgba(255,255,255,0.35) !important; }
+.chat-message.other a[download] {
+  background: var(--wl-blue-pale) !important;
+  color: var(--wl-blue) !important;
+}
+.chat-message.other a[download]:hover { background: var(--wl-blue-soft) !important; }
 
 @keyframes bubble-in {
   from { opacity: 0; transform: translateY(10px) scale(0.97); }
@@ -2000,6 +2028,16 @@ img { max-width: 100%; height: auto; }
     background: #141C2E;
     border-color: rgba(51, 65, 85, 0.3);
   }
+
+  .chat-message.other a[download] {
+    background: rgba(37, 99, 235, 0.15) !important;
+    color: var(--wl-blue-soft) !important;
+  }
+  .chat-message.other a[download]:hover { background: rgba(37, 99, 235, 0.25) !important; }
+  .chat-message a[download] {
+    background: rgba(255,255,255,0.08) !important;
+  }
+  .chat-message a[download]:hover { background: rgba(255,255,255,0.15) !important; }
 
   .attachment-btn { background: rgba(37, 99, 235, 0.06); }
   .attachment-btn:hover { background: rgba(37, 99, 235, 0.14); }

@@ -582,7 +582,7 @@
         circle.classList.add('searching');
         circle.classList.remove('connected');
         icon.className = 'fas fa-search connection-icon';
-        status.textContent = mode === 'join' ? 'Waiting' : 'Searching';
+        status.textContent = mode === 'join' ? 'Joining' : 'Searching';
         timer.textContent = '00:00';
 
         timerInterval = setInterval(function () {
@@ -692,6 +692,10 @@
         if (chatEl && chatEl.classList.contains('d-none') && message && statusMap[message] && !isFinal) {
           showCancelBtn();
           startDots();
+          var circle = document.getElementById('connectionCircle');
+          if (circle && !circle.classList.contains('searching') && !circle.classList.contains('connected')) {
+            startTimer(message.toLowerCase().indexOf('join') !== -1 ? 'join' : 'connect');
+          }
         }
       };
 
@@ -924,23 +928,26 @@
             window._wlSending = false;
             clearAttachmentPanel();
           }
-        }, 500);
+        }, 800);
       };
 
       function injectAndSend(file) {
         var fi = document.getElementById('chat-file');
         var sm = document.getElementById('btn-send-media');
         if (!fi || !sm) return;
+        /* Clean up any previously-defined custom getter */
+        try { delete fi.files; } catch(e) {}
         var dt = new DataTransfer();
         dt.items.add(file);
         try {
           var nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files').set;
           nativeSetter.call(fi, dt.files);
         } catch(e) {
-          try { Object.defineProperty(fi, 'files', { get: function() { return dt.files; }, configurable: true }); } catch(e2) {}
+          /* Native setter unavailable — abort silently */
+          return;
         }
         fi.dispatchEvent(new Event('change', { bubbles: true }));
-        setTimeout(function () { sm.click(); }, 60);
+        setTimeout(function () { sm.click(); }, 80);
       }
 
       /* ---- Clear attachment panel (keeps file selection until send is done) ---- */
@@ -963,6 +970,7 @@
           if (!src || src.length === 0) return;
           var sf = src.slice();
           src.length = 0;
+          clearAttachmentPanel();
           fileQueue = sf;
           sending = true;
           window._wlSending = true;
