@@ -688,6 +688,11 @@
         if (message && statusMap[message]) {
           setTagline(statusMap[message], true);
         }
+        var chatEl = document.getElementById('chat-section');
+        if (chatEl && chatEl.classList.contains('d-none') && message && statusMap[message] && !isFinal) {
+          showCancelBtn();
+          startDots();
+        }
       };
 
       var origAlert = window.showAlert;
@@ -791,7 +796,7 @@
 
       if (fileInput) {
         fileInput.addEventListener('change', function () {
-          if (window._wlSending) { fileInput.value = ''; return; }
+          if (window._wlSending) { return; }
           if (fileInput.files && fileInput.files.length > 0) {
             for (var i = 0; i < fileInput.files.length; i++) {
               selectedFiles.push(fileInput.files[i]);
@@ -935,7 +940,7 @@
           try { Object.defineProperty(fi, 'files', { get: function() { return dt.files; }, configurable: true }); } catch(e2) {}
         }
         fi.dispatchEvent(new Event('change', { bubbles: true }));
-        sm.click();
+        setTimeout(function () { sm.click(); }, 60);
       }
 
       /* ---- Clear attachment panel (keeps file selection until send is done) ---- */
