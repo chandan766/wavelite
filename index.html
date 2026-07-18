@@ -886,15 +886,16 @@
           m.addedNodes.forEach(function (node) {
             if (node.nodeType !== 1 || !node.id || !node.id.startsWith('progress-')) return;
             var mid = node.id.replace('progress-', '');
-            var prev = node.previousElementSibling;
+            var target = document.querySelector('[data-message-id="' + mid + '"]');
 
-            if (prev && prev.classList.contains('chat-message')) {
-              prev.style.position = 'relative';
-              prev.classList.add('file-uploading');
+            if (target && target.classList.contains('chat-message')) {
+              target.style.position = 'relative';
+              target.classList.add('file-uploading');
               var ov = document.createElement('div');
               ov.className = 'upload-overlay';
+              ov.setAttribute('data-progress-mid', mid);
               ov.innerHTML = '<div class="upload-progress-ring"><svg viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="42"/><circle class="ring-fill" cx="50" cy="50" r="42" data-mid="' + mid + '"/></svg><span class="upload-percent" data-mid="' + mid + '">0%</span></div>';
-              prev.appendChild(ov);
+              target.appendChild(ov);
               node.style.display = 'none';
             } else {
               node.classList.add('progress-premium');
@@ -938,12 +939,12 @@
       /* ---- Overlay removal — no file chaining needed (script.js owns the queue) ---- */
       var origHPB = window.hideProgressBar;
       window.hideProgressBar = function (messageId) {
-        var upl = document.querySelector('.file-uploading');
-        if (upl) {
-          var ov = upl.querySelector('.upload-overlay');
+        var target = document.querySelector('[data-message-id="' + messageId + '"]');
+        if (target && target.classList.contains('chat-message')) {
+          var ov = target.querySelector('.upload-overlay');
           if (ov) {
             ov.classList.add('fade-out');
-            setTimeout(function () { ov.remove(); upl.classList.remove('file-uploading'); }, 400);
+            setTimeout(function () { ov.remove(); target.classList.remove('file-uploading'); }, 400);
           }
         }
         if (origHPB) origHPB(messageId);
@@ -979,7 +980,11 @@
 
           var ts = Date.now();
           for (var i = 0; i < files.length; i++) {
-            mediaSendQueue.push({ file: files[i], queueId: 'queue-' + ts + '-' + i });
+            var qid = 'queue-' + ts + '-' + i;
+            mediaSendQueue.push({ file: files[i], queueId: qid });
+            if (i > 0 || isSendingFile) {
+              showQueuedProgress(qid, files[i].name);
+            }
           }
 
           if (!isSendingFile) {

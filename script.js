@@ -24,6 +24,8 @@ let currentFile = null;
 let retryCounts = new Map();
 let activeTransfers = new Map();
 const receivedTransfers = new Map();
+let nextTransferIndex = 1;
+const receiverTransferIndexMap = new Map();
 
 $(document).ready(() => {
   let savedProfilePeerId = localStorage.getItem("peerIds") || "";
@@ -590,19 +592,12 @@ function setupDataChannel() {
 
   dataChannel.onmessage = (e) => {
     if (e.data instanceof ArrayBuffer) {
-      const view = new Uint32Array(e.data, 0, 3);
-      const [majorIndex, chunkIndex, totalChunks] = view;
-      let messageId = null;
-
-      for (const [id, transfer] of receivedTransfers.entries()) {
-        if (transfer.fileInfo.useSingleChannel) {
-          messageId = id;
-          break;
-        }
-      }
+      const view = new Uint32Array(e.data, 0, 4);
+      const [transferIndex, majorIndex, chunkIndex, totalChunks] = view;
+      const messageId = receiverTransferIndexMap.get(transferIndex);
 
       if (!messageId) {
-        console.warn("No active single-channel transfer found for incoming chunk.");
+        console.warn("Received chunk for unknown transferIndex:", transferIndex);
         return;
       }
 
@@ -613,7 +608,7 @@ function setupDataChannel() {
         return;
       }
 
-      const chunkData = e.data.slice(12);
+      const chunkData = e.data.slice(16);
       transfer.buffers.push(chunkData);
       transfer.receivedBytes += chunkData.byteLength;
       transfer.expectedChunk++;
@@ -646,6 +641,7 @@ function setupDataChannel() {
         hideProgressBar(messageId);
         receivedTransfers.delete(messageId);
         retryCounts.delete(messageId);
+        if (transfer.transferIndex) receiverTransferIndexMap.delete(transfer.transferIndex);
       } else {
         clearTimeout(transfer.timeoutId);
         transfer.timeoutId = setTimeout(() => {
@@ -665,6 +661,7 @@ function setupDataChannel() {
             hideProgressBar(messageId);
             receivedTransfers.delete(messageId);
             retryCounts.delete(messageId);
+            if (transfer.transferIndex) receiverTransferIndexMap.delete(transfer.transferIndex);
           }
         }, CHUNK_TIMEOUT);
       }
@@ -690,7 +687,12 @@ function setupDataChannel() {
           expectedChunk: 0,
           lastChunkTime: Date.now(),
           timeoutId: null,
+          transferIndex: msg.transferIndex || null,
         });
+
+        if (msg.transferIndex) {
+          receiverTransferIndexMap.set(msg.transferIndex, msg.messageId);
+        }
 
         if (!msg.useSingleChannel) {
           mediaReceivingChunks[msg.messageId] = {
@@ -704,10 +706,20 @@ function setupDataChannel() {
             bytesReceived: 0,
             expectedSize: msg.fileSize,
             completed: !1,
+            transferIndex: msg.transferIndex || null,
           };
         }
 
-        showProgressBar(msg.messageId, !1);
+        var isSender = !1;
+        var placeholderHtml = '<div class="chat-message other px-3" data-message-id="' + msg.messageId + '">' +
+          '<div class="message py-1" style="font-size:12px;font-weight:450;">' +
+          '<i class="fas fa-file text-dark me-2 fs-4"></i>' +
+          '<div class="file-name" style="font-size: 13px; font-weight: 500;">' + (msg.fileName || 'Receiving file...') + '</div>' +
+          '<div class="file-name" style="font-size: 10px;font-weight:500;">Receiving...</div>' +
+          '</div></div>';
+        $("#chat-display").append(placeholderHtml);
+
+        showProgressBar(msg.messageId, isSender);
         console.log(`Received file metadata for ${msg.fileName}`);
       } else if (msg.type === "resend_request") {
         console.log(`🔁 Resend request for ${msg.messageId} [${msg.majorIndex}-${msg.chunkIndex}]`);
@@ -733,6 +745,7 @@ function setupDataChannel() {
       showAlert(`Transfer error for ${transfer.fileInfo.fileName}. Please try again.`);
       clearTimeout(transfer.timeoutId);
       retryCounts.delete(messageId);
+      if (transfer.transferIndex) receiverTransferIndexMap.delete(transfer.transferIndex);
     }
 
     receivedTransfers.clear();
@@ -742,22 +755,26 @@ function setupDataChannel() {
 function setupMediaDataChannel(channel, index) {
   channel.onmessage = (e) => {
     const data = new Uint8Array(e.data);
-    const metadata = new Uint32Array(data.slice(0, 12).buffer);
-    const majorIndex = metadata[0];
-    const chunkIndex = metadata[1];
-    const totalChunks = metadata[2];
-    const payload = data.slice(12);
+    const metadata = new Uint32Array(data.slice(0, 16).buffer);
+    const transferIndex = metadata[0];
+    const majorIndex = metadata[1];
+    const chunkIndex = metadata[2];
+    const totalChunks = metadata[3];
+    const payload = data.slice(16);
 
-    const activeTransferEntry = Object.entries(mediaReceivingChunks).find(
-      ([_, transfer]) => !transfer.completed && transfer.parts.length === 3
-    );
+    const messageId = receiverTransferIndexMap.get(transferIndex);
 
-    if (!activeTransferEntry) {
-      console.warn("Received chunk but no file info available yet or this is a single-channel transfer.");
+    if (!messageId) {
+      console.warn("Received multi-channel chunk for unknown transferIndex:", transferIndex);
       return;
     }
 
-    const [messageId, transfer] = activeTransferEntry;
+    const transfer = mediaReceivingChunks[messageId];
+
+    if (!transfer) {
+      console.warn("Received chunk but no file info available yet for messageId:", messageId);
+      return;
+    }
 
     if (!transfer.parts[majorIndex]) {
       transfer.parts[majorIndex] = new Array(totalChunks).fill(null);
@@ -835,6 +852,7 @@ function setupMediaDataChannel(channel, index) {
     );
     hideProgressBar(messageId);
     delete mediaReceivingChunks[messageId];
+    if (transfer.transferIndex) receiverTransferIndexMap.delete(transfer.transferIndex);
   };
 
   channel.onerror = (err) => {
@@ -891,7 +909,7 @@ function sendFileChunks(messageId, onComplete = () => {}) {
 
       reader.onload = () => {
         try {
-          const meta = new Uint32Array([0, currentChunk, totalChunks]);
+          const meta = new Uint32Array([transfer.transferIndex, 0, currentChunk, totalChunks]);
           const data = new Uint8Array(reader.result);
           const combined = new Uint8Array(meta.byteLength + data.byteLength);
           combined.set(new Uint8Array(meta.buffer), 0);
@@ -975,7 +993,7 @@ function sendFileChunks(messageId, onComplete = () => {}) {
 
       reader.onload = () => {
         try {
-          const meta = new Uint32Array([majorIndex, subIndex, partChunks.length]);
+          const meta = new Uint32Array([transfer.transferIndex, majorIndex, subIndex, partChunks.length]);
           const data = new Uint8Array(reader.result);
           const combined = new Uint8Array(meta.byteLength + data.byteLength);
           combined.set(new Uint8Array(meta.buffer), 0);
@@ -1054,7 +1072,7 @@ function resendFileChunk(messageId, majorIndex, chunkIndex) {
 
   reader.onload = () => {
     try {
-      const meta = new Uint32Array([majorIndex, chunkIndex, partChunks.length]);
+      const meta = new Uint32Array([transfer.transferIndex, majorIndex, chunkIndex, partChunks.length]);
       const data = new Uint8Array(reader.result);
       const combined = new Uint8Array(meta.byteLength + data.byteLength);
       combined.set(new Uint8Array(meta.buffer), 0);
@@ -1262,16 +1280,19 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
   }
 
   try {
-    $("#chat-display").append(`
-      <div class="chat-message ${alignClass} px-3">
-        <div class="message py-1" style="font-size:12px;font-weight:450;">${messageContent}</div>
-        <div class="message-meta d-flex justify-content-end border-top border-secondary mt-2">
-          <span class="timestamp text-end" style="font-size:10px;">${
-            isSelf ? "" : `<span class="name" style="font-size:12px;"></span>`
-          } ${timestamp} ${statusIcon}</span>
-        </div>
-      </div>
-    `);
+    var existing = document.querySelector('[data-message-id="' + messageId + '"]');
+    var newBubble = $('<div class="chat-message ' + alignClass + ' px-3" data-message-id="' + messageId + '">' +
+      '<div class="message py-1" style="font-size:12px;font-weight:450;">' + messageContent + '</div>' +
+      '<div class="message-meta d-flex justify-content-end border-top border-secondary mt-2">' +
+      '<span class="timestamp text-end" style="font-size:10px;">' +
+      (isSelf ? '' : '<span class="name" style="font-size:12px;"></span>') + ' ' + timestamp + ' ' + statusIcon +
+      '</span></div></div>');
+
+    if (existing) {
+      existing.replaceWith(newBubble[0]);
+    } else {
+      $("#chat-display").append(newBubble);
+    }
     $("#chat-display").scrollTop($("#chat-display")[0].scrollHeight);
     console.log(`Displayed message for ${type}: ${content}, fileType: ${
       fileType || "none"
@@ -1467,6 +1488,7 @@ function processNextFileInQueue() {
     }
   }
 
+  const transferIndex = nextTransferIndex++;
   activeTransfers.set(messageId, {
     file,
     fileName: file.name,
@@ -1475,6 +1497,7 @@ function processNextFileInQueue() {
     totalChunks: chunkParts.flat().length,
     chunkParts,
     useSingleChannel,
+    transferIndex,
   });
 
   const metadata = {
@@ -1485,6 +1508,7 @@ function processNextFileInQueue() {
     fileSize: file.size,
     fileType: file.type || "application/octet-stream",
     useSingleChannel,
+    transferIndex,
   };
 
   try {
