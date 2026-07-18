@@ -800,7 +800,6 @@
 
       if (fileInput) {
         fileInput.addEventListener('change', function () {
-          if (window._wlSending) { return; }
           if (fileInput.files && fileInput.files.length > 0) {
             for (var i = 0; i < fileInput.files.length; i++) {
               selectedFiles.push(fileInput.files[i]);
@@ -840,7 +839,7 @@
     })();
   </script>
 
-  <!-- File Upload Progress Overlay + Sequential Multi-file Send + Incoming File Card -->
+  <!-- File Upload Progress Overlay + Direct File Queue -->
   <script>
     (function () {
       /* ---- Progress Ring + Overlay ---- */
@@ -855,7 +854,6 @@
             var prev = node.previousElementSibling;
 
             if (prev && prev.classList.contains('chat-message')) {
-              /* Sender: overlay ring on file bubble */
               prev.style.position = 'relative';
               prev.classList.add('file-uploading');
               var ov = document.createElement('div');
@@ -864,7 +862,6 @@
               prev.appendChild(ov);
               node.style.display = 'none';
             } else {
-              /* Receiver: incoming file card */
               node.classList.add('progress-premium');
               enhanceIncomingFileCard(node, mid);
             }
@@ -873,7 +870,6 @@
       });
       fileObs.observe(chatDisplay, { childList: true });
 
-      /* ---- Incoming file card enhancement ---- */
       function enhanceIncomingFileCard(el, mid) {
         var textEl = el.querySelector('.file-info, .file-name, .chat-message-text');
         if (!textEl) return;
@@ -904,12 +900,9 @@
         if (pct) pct.textContent = r + '%';
       };
 
-      /* ---- Sequential multi-file send ---- */
-      var fileQueue = [];
-      var sending = false;
+      /* ---- Overlay removal — no file chaining needed (script.js owns the queue) ---- */
       var origHPB = window.hideProgressBar;
       window.hideProgressBar = function (messageId) {
-        /* Remove overlay */
         var upl = document.querySelector('.file-uploading');
         if (upl) {
           var ov = upl.querySelector('.upload-overlay');
@@ -919,38 +912,9 @@
           }
         }
         if (origHPB) origHPB(messageId);
-        /* Chain next file send */
-        setTimeout(function () {
-          if (fileQueue.length > 0) {
-            injectAndSend(fileQueue.shift());
-          } else {
-            sending = false;
-            window._wlSending = false;
-            clearAttachmentPanel();
-          }
-        }, 800);
       };
 
-      function injectAndSend(file) {
-        var fi = document.getElementById('chat-file');
-        var sm = document.getElementById('btn-send-media');
-        if (!fi || !sm) return;
-        /* Clean up any previously-defined custom getter */
-        try { delete fi.files; } catch(e) {}
-        var dt = new DataTransfer();
-        dt.items.add(file);
-        try {
-          var nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files').set;
-          nativeSetter.call(fi, dt.files);
-        } catch(e) {
-          /* Native setter unavailable — abort silently */
-          return;
-        }
-        fi.dispatchEvent(new Event('change', { bubbles: true }));
-        setTimeout(function () { sm.click(); }, 80);
-      }
-
-      /* ---- Clear attachment panel (keeps file selection until send is done) ---- */
+      /* ---- Clear attachment panel ---- */
       function clearAttachmentPanel() {
         var panel = document.getElementById('file-attachment-panel');
         var list = document.getElementById('file-list');
@@ -962,19 +926,30 @@
         if (fn) fn.textContent = 'No file selected';
       }
 
-      /* ---- Wire Send button for sequential file send ---- */
+      /* ---- Wire Send button — push files directly to script.js's mediaSendQueue ---- */
       var sendBtn = document.getElementById('btn-send-text');
       if (sendBtn) {
         sendBtn.addEventListener('click', function () {
           var src = window._wlSelectedFiles;
           if (!src || src.length === 0) return;
-          var sf = src.slice();
+          var files = src.slice();
           src.length = 0;
           clearAttachmentPanel();
-          fileQueue = sf;
-          sending = true;
-          window._wlSending = true;
-          injectAndSend(fileQueue.shift());
+          if (files.length === 0) return;
+
+          if (typeof mediaSendQueue === 'undefined' || typeof processNextFileInQueue === 'undefined') {
+            console.error('WaveLite: media send internals unavailable');
+            return;
+          }
+
+          var ts = Date.now();
+          for (var i = 0; i < files.length; i++) {
+            mediaSendQueue.push({ file: files[i], queueId: 'queue-' + ts + '-' + i });
+          }
+
+          if (!isSendingFile) {
+            processNextFileInQueue();
+          }
         });
       }
     })();
