@@ -701,6 +701,10 @@
 
       var origAlert = window.showAlert;
       window.showAlert = function (message, isError) {
+        if (typeof isSendingFile !== 'undefined' && isSendingFile &&
+            message && message.indexOf('connection is established') !== -1) {
+          return;
+        }
         if (origAlert) origAlert(message, isError);
         if (isError !== false) {
           var circle = document.getElementById('connectionCircle');
@@ -842,6 +846,37 @@
   <!-- File Upload Progress Overlay + Direct File Queue -->
   <script>
     (function () {
+      /* ---- Fix: ensure sendFileChunks always calls onComplete ---- */
+      var origSFC = window.sendFileChunks;
+      if (origSFC) {
+        window.sendFileChunks = function (messageId, onComplete) {
+          if (typeof onComplete !== 'function') onComplete = function () {};
+          var transfer = typeof activeTransfers !== 'undefined' && activeTransfers.get(messageId);
+          if (!transfer) {
+            console.warn('WaveLite: sendFileChunks — no transfer for', messageId);
+            if (typeof hideProgressBar === 'function') hideProgressBar(messageId);
+            if (typeof activeTransfers !== 'undefined') activeTransfers.delete(messageId);
+            onComplete();
+            return;
+          }
+          if (transfer.useSingleChannel && !dataChannel) {
+            console.warn('WaveLite: sendFileChunks — dataChannel not open for', messageId);
+            if (typeof hideProgressBar === 'function') hideProgressBar(messageId);
+            if (typeof activeTransfers !== 'undefined') activeTransfers.delete(messageId);
+            onComplete();
+            return;
+          }
+          try {
+            origSFC(messageId, onComplete);
+          } catch (e) {
+            console.error('WaveLite: sendFileChunks exception:', e);
+            if (typeof hideProgressBar === 'function') hideProgressBar(messageId);
+            if (typeof activeTransfers !== 'undefined') activeTransfers.delete(messageId);
+            onComplete();
+          }
+        };
+      }
+
       /* ---- Progress Ring + Overlay ---- */
       var chatDisplay = document.getElementById('chat-display');
       if (!chatDisplay) return;
