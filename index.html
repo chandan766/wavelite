@@ -849,30 +849,29 @@
       /* ---- Fix: ensure sendFileChunks always calls onComplete ---- */
       var origSFC = window.sendFileChunks;
       if (origSFC) {
-        window.sendFileChunks = function (messageId, onComplete) {
-          if (typeof onComplete !== 'function') onComplete = function () {};
+        window.sendFileChunks = function (messageId) {
           var transfer = typeof activeTransfers !== 'undefined' && activeTransfers.get(messageId);
           if (!transfer) {
             console.warn('WaveLite: sendFileChunks — no transfer for', messageId);
             if (typeof hideProgressBar === 'function') hideProgressBar(messageId);
             if (typeof activeTransfers !== 'undefined') activeTransfers.delete(messageId);
-            onComplete();
+            if (typeof isSendingFile !== 'undefined') { isSendingFile = false; processNextFileInQueue(); }
             return;
           }
           if (transfer.useSingleChannel && !dataChannel) {
             console.warn('WaveLite: sendFileChunks — dataChannel not open for', messageId);
             if (typeof hideProgressBar === 'function') hideProgressBar(messageId);
             if (typeof activeTransfers !== 'undefined') activeTransfers.delete(messageId);
-            onComplete();
+            if (typeof isSendingFile !== 'undefined') { isSendingFile = false; processNextFileInQueue(); }
             return;
           }
           try {
-            origSFC(messageId, onComplete);
+            origSFC(messageId);
           } catch (e) {
             console.error('WaveLite: sendFileChunks exception:', e);
             if (typeof hideProgressBar === 'function') hideProgressBar(messageId);
             if (typeof activeTransfers !== 'undefined') activeTransfers.delete(messageId);
-            onComplete();
+            if (typeof isSendingFile !== 'undefined') { isSendingFile = false; processNextFileInQueue(); }
           }
         };
       }
@@ -962,7 +961,7 @@
         if (fn) fn.textContent = 'No file selected';
       }
 
-      /* ---- Wire Send button — push files directly to script.js's mediaSendQueue ---- */
+      /* ---- Wire Send button — send all metadata upfront, then queue chunks ---- */
       var sendBtn = document.getElementById('btn-send-text');
       if (sendBtn) {
         sendBtn.addEventListener('click', function () {
@@ -973,23 +972,58 @@
           clearAttachmentPanel();
           if (files.length === 0) return;
 
-          if (typeof mediaSendQueue === 'undefined' || typeof processNextFileInQueue === 'undefined') {
+          if (typeof activeTransfers === 'undefined' || typeof processNextFileInQueue === 'undefined' || typeof dataChannel === 'undefined') {
             console.error('WaveLite: media send internals unavailable');
             return;
           }
+          if (!dataChannel || dataChannel.readyState !== 'open') {
+            console.error('WaveLite: dataChannel not open');
+            return;
+          }
 
+          var name = document.getElementById('chat-username').value || 'Anonymous';
           var ts = Date.now();
+          var batchItems = [];
+
           for (var i = 0; i < files.length; i++) {
-            var qid = 'queue-' + ts + '-' + i;
-            mediaSendQueue.push({ file: files[i], queueId: qid });
-            if (i > 0 || isSendingFile) {
-              showQueuedProgress(qid, files[i].name);
+            var file = files[i];
+            var mid = ts + '-' + i;
+            var ti = nextTransferIndex++;
+            var useSingle = file.size < 1024 * 1024;
+            var numCh = mediaChannels.length;
+            var pSize = Math.ceil(file.size / numCh);
+            var cParts = [];
+            for (var c = 0; c < numCh; c++) {
+              var s = c * pSize;
+              var e = Math.min(s + pSize, file.size);
+              cParts[c] = [];
+              for (var off = s; off < e; off += 65536) {
+                cParts[c].push(file.slice(off, Math.min(off + 65536, e)));
+              }
             }
+            activeTransfers.set(mid, {
+              file: file, fileName: file.name, fileSize: file.size,
+              fileType: file.type || 'application/octet-stream',
+              totalChunks: cParts.flat().length, chunkParts: cParts,
+              useSingleChannel: useSingle, transferIndex: ti
+            });
+            dataChannel.send(JSON.stringify({
+              type: 'file', name: name, messageId: mid,
+              fileName: file.name, fileSize: file.size,
+              fileType: file.type || 'application/octet-stream',
+              useSingleChannel: useSingle, transferIndex: ti
+            }));
+            var qid = 'queue-' + ts + '-' + i;
+            batchItems.push({ messageId: mid, queueId: qid, file: file });
           }
 
-          if (!isSendingFile) {
-            processNextFileInQueue();
+          pendingSendBatch = batchItems;
+
+          for (var j = 0; j < batchItems.length; j++) {
+            showQueuedProgress(batchItems[j].queueId, batchItems[j].file.name);
           }
+
+          processNextFileInQueue();
         });
       }
     })();

@@ -18,6 +18,7 @@ const NUM_MEDIA_CHANNELS = 3;
 const PING_INTERVAL = 10000;
 const CHUNK_SIZE = 65536;
 const BUFFER_THRESHOLD = 262144;
+const ACK_TIMEOUT = 20000;
 
 let fileReader = new FileReader();
 let currentFile = null;
@@ -26,6 +27,9 @@ let activeTransfers = new Map();
 const receivedTransfers = new Map();
 let nextTransferIndex = 1;
 const receiverTransferIndexMap = new Map();
+let pendingSendBatch = [];
+let ackSafetyTimeouts = new Map();
+let currentReceivingMessageId = null;
 
 $(document).ready(() => {
   let savedProfilePeerId = localStorage.getItem("peerIds") || "";
@@ -642,6 +646,14 @@ function setupDataChannel() {
         receivedTransfers.delete(messageId);
         retryCounts.delete(messageId);
         if (transfer.transferIndex) receiverTransferIndexMap.delete(transfer.transferIndex);
+        if (currentReceivingMessageId === messageId) currentReceivingMessageId = null;
+        try { dataChannel.send(JSON.stringify({ type: "file_ack", messageId })); } catch (e) {}
+        var nextWaiting = document.querySelector('[data-status="waiting"]');
+        if (nextWaiting) {
+          var nextMid = nextWaiting.getAttribute('data-message-id');
+          nextWaiting.setAttribute('data-status', 'receiving');
+          showProgressBar(nextMid, !1);
+        }
       } else {
         clearTimeout(transfer.timeoutId);
         transfer.timeoutId = setTimeout(() => {
@@ -711,19 +723,38 @@ function setupDataChannel() {
         }
 
         var isSender = !1;
-        var placeholderHtml = '<div class="chat-message other px-3" data-message-id="' + msg.messageId + '">' +
+        var isWaiting = currentReceivingMessageId !== null && currentReceivingMessageId !== msg.messageId;
+        var statusLabel = isWaiting ? 'Waiting...' : 'Receiving...';
+        var placeholderHtml = '<div class="chat-message other px-3" data-message-id="' + msg.messageId + '" data-status="' + (isWaiting ? 'waiting' : 'receiving') + '">' +
           '<div class="message py-1" style="font-size:12px;font-weight:450;">' +
           '<i class="fas fa-file text-dark me-2 fs-4"></i>' +
           '<div class="file-name" style="font-size: 13px; font-weight: 500;">' + (msg.fileName || 'Receiving file...') + '</div>' +
-          '<div class="file-name" style="font-size: 10px;font-weight:500;">Receiving...</div>' +
+          '<div class="file-name" style="font-size: 10px;font-weight:500;">' + statusLabel + '</div>' +
           '</div></div>';
         $("#chat-display").append(placeholderHtml);
 
-        showProgressBar(msg.messageId, isSender);
+        if (!isWaiting) {
+          currentReceivingMessageId = msg.messageId;
+          showProgressBar(msg.messageId, isSender);
+        }
         console.log(`Received file metadata for ${msg.fileName}`);
       } else if (msg.type === "resend_request") {
         console.log(`🔁 Resend request for ${msg.messageId} [${msg.majorIndex}-${msg.chunkIndex}]`);
         resendFileChunk(msg.messageId, msg.majorIndex, msg.chunkIndex);
+      } else if (msg.type === "file_ack") {
+        console.log(`✅ Received file_ack for messageId: ${msg.messageId}`);
+        if (ackSafetyTimeouts.has(msg.messageId)) {
+          clearTimeout(ackSafetyTimeouts.get(msg.messageId));
+          ackSafetyTimeouts.delete(msg.messageId);
+        }
+        hideProgressBar(msg.messageId);
+        $("#chat-file").val("");
+        $("#btn-toggle-back").click();
+        currentFile = null;
+        activeTransfers.delete(msg.messageId);
+        retryCounts.delete(msg.messageId);
+        isSendingFile = !1;
+        processNextFileInQueue();
       } else if (msg.type === "username") {
         console.log("Received peer username:", msg.name);
         $("#headerBtnName").text(msg.name).addClass("text-capitalize");
@@ -749,6 +780,11 @@ function setupDataChannel() {
     }
 
     receivedTransfers.clear();
+    pendingSendBatch = [];
+    ackSafetyTimeouts.forEach(function(t) { clearTimeout(t); });
+    ackSafetyTimeouts.clear();
+    isSendingFile = !1;
+    currentReceivingMessageId = null;
   };
 }
 
@@ -853,6 +889,14 @@ function setupMediaDataChannel(channel, index) {
     hideProgressBar(messageId);
     delete mediaReceivingChunks[messageId];
     if (transfer.transferIndex) receiverTransferIndexMap.delete(transfer.transferIndex);
+    if (currentReceivingMessageId === messageId) currentReceivingMessageId = null;
+    try { dataChannel.send(JSON.stringify({ type: "file_ack", messageId })); } catch (e) {}
+    var nextWaiting = document.querySelector('[data-status="waiting"]');
+    if (nextWaiting) {
+      var nextMid = nextWaiting.getAttribute('data-message-id');
+      nextWaiting.setAttribute('data-status', 'receiving');
+      showProgressBar(nextMid, !1);
+    }
   };
 
   channel.onerror = (err) => {
@@ -866,7 +910,7 @@ function setupMediaDataChannel(channel, index) {
   };
 }
 
-function sendFileChunks(messageId, onComplete = () => {}) {
+function sendFileChunks(messageId) {
   const transfer = activeTransfers.get(messageId);
   if (!transfer) return;
 
@@ -887,13 +931,18 @@ function sendFileChunks(messageId, onComplete = () => {}) {
     const sendChunk = () => {
       if (currentChunk >= totalChunks) {
         console.log("✅ File sending complete (single channel) for messageId:", messageId);
-        hideProgressBar(messageId);
-        $("#chat-file").val("");
-        $("#btn-toggle-back").click();
-        currentFile = null;
-        activeTransfers.delete(messageId);
-        retryCounts.delete(messageId);
-        onComplete();
+        updateProgressBar(messageId, 99);
+        var progressEl = document.querySelector('#progress-' + messageId + ' .progress-percentage');
+        if (progressEl) progressEl.textContent = 'Finalizing...';
+        ackSafetyTimeouts.set(messageId, setTimeout(() => {
+          console.warn("ACK timeout for messageId:", messageId);
+          ackSafetyTimeouts.delete(messageId);
+          hideProgressBar(messageId);
+          activeTransfers.delete(messageId);
+          retryCounts.delete(messageId);
+          isSendingFile = !1;
+          processNextFileInQueue();
+        }, ACK_TIMEOUT));
         return;
       }
 
@@ -929,7 +978,10 @@ function sendFileChunks(messageId, onComplete = () => {}) {
           console.error("❌ Error sending chunk:", err);
           hideProgressBar(messageId);
           showAlert("Failed to send chunk.");
-          onComplete();
+          activeTransfers.delete(messageId);
+          retryCounts.delete(messageId);
+          isSendingFile = !1;
+          processNextFileInQueue();
         }
       };
 
@@ -937,7 +989,10 @@ function sendFileChunks(messageId, onComplete = () => {}) {
         console.error("❌ FileReader error during send");
         hideProgressBar(messageId);
         showAlert("Failed to read file chunk.");
-        onComplete();
+        activeTransfers.delete(messageId);
+        retryCounts.delete(messageId);
+        isSendingFile = !1;
+        processNextFileInQueue();
       };
 
       reader.readAsArrayBuffer(slice);
@@ -1013,7 +1068,10 @@ function sendFileChunks(messageId, onComplete = () => {}) {
           console.error("❌ Send error:", err);
           hideProgressBar(messageId);
           showAlert("Failed to send chunk");
-          onComplete();
+          activeTransfers.delete(messageId);
+          retryCounts.delete(messageId);
+          isSendingFile = !1;
+          processNextFileInQueue();
         }
       };
 
@@ -1021,7 +1079,10 @@ function sendFileChunks(messageId, onComplete = () => {}) {
         console.error("❌ FileReader error");
         hideProgressBar(messageId);
         showAlert("Failed to read chunk");
-        onComplete();
+        activeTransfers.delete(messageId);
+        retryCounts.delete(messageId);
+        isSendingFile = !1;
+        processNextFileInQueue();
       };
 
       reader.readAsArrayBuffer(partChunks[subIndex]);
@@ -1034,13 +1095,18 @@ function sendFileChunks(messageId, onComplete = () => {}) {
     if (totalSentChunks >= totalSubChunks) {
       clearInterval(checkComplete);
       console.log("✅ File sending complete for messageId:", messageId);
-      hideProgressBar(messageId);
-      $("#chat-file").val("");
-      $("#btn-toggle-back").click();
-      currentFile = null;
-      activeTransfers.delete(messageId);
-      retryCounts.delete(messageId);
-      onComplete();
+      updateProgressBar(messageId, 99);
+      var progressEl = document.querySelector('#progress-' + messageId + ' .progress-percentage');
+      if (progressEl) progressEl.textContent = 'Finalizing...';
+      ackSafetyTimeouts.set(messageId, setTimeout(() => {
+        console.warn("ACK timeout for messageId:", messageId);
+        ackSafetyTimeouts.delete(messageId);
+        hideProgressBar(messageId);
+        activeTransfers.delete(messageId);
+        retryCounts.delete(messageId);
+        isSendingFile = !1;
+        processNextFileInQueue();
+      }, ACK_TIMEOUT));
     }
   }, 300);
 }
@@ -1210,8 +1276,8 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
 
     if (isImage) {
       messageContent = `
-      <div class="image-wrapper" style="max-width: 100%; overflow: hidden;">
-        <img src="${file}" alt="${content}" class="img-fluid rounded mt-2" style="width: 100%; height: auto; object-fit: contain;" />
+      <div class="image-wrapper" style="width: 220px; height: 220px; overflow: hidden; border-radius: 8px;">
+        <img src="${file}" alt="${content}" class="chat-thumb mt-2" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
       </div>
       <br>${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`;
     } else if (isAudio) {
@@ -1454,6 +1520,14 @@ function togglePlayPause(containerId) {
 }
 
 function processNextFileInQueue() {
+  if (pendingSendBatch.length > 0) {
+    var item = pendingSendBatch.shift();
+    isSendingFile = !0;
+    $(`#${item.queueId}`).remove();
+    setTimeout(() => { sendFileChunks(item.messageId); }, 100);
+    return;
+  }
+
   if (mediaSendQueue.length === 0) {
     isSendingFile = !1;
     return;
@@ -1518,10 +1592,7 @@ function processNextFileInQueue() {
     showProgressBar(messageId, !0);
 
     setTimeout(() => {
-      sendFileChunks(messageId, () => {
-        isSendingFile = !1;
-        processNextFileInQueue();
-      });
+      sendFileChunks(messageId);
     }, 100);
   } catch (error) {
     console.error("Error sending file:", error);
