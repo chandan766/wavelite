@@ -1803,13 +1803,7 @@ img { max-width: 100%; height: auto; }
   color: var(--wl-text-secondary);
 }
 
-.file-send-actions {
-  display: flex;
-  gap: 6px;
-}
-
-.btn-clear-all,
-.btn-send-all {
+.btn-clear-all {
   border: none;
   border-radius: 6px;
   padding: 5px 12px;
@@ -1820,21 +1814,11 @@ img { max-width: 100%; height: auto; }
   align-items: center;
   gap: 4px;
   transition: background 0.2s var(--wl-ease), color 0.2s var(--wl-ease);
-}
-
-.btn-clear-all {
   background: var(--wl-danger-bg);
   color: var(--wl-danger);
 }
 
 .btn-clear-all:hover { background: var(--wl-danger); color: white; }
-
-.btn-send-all {
-  background: var(--wl-blue);
-  color: white;
-}
-
-.btn-send-all:hover { background: var(--wl-blue-hover); }
 
 /* Incoming file type badge */
 .file-type-badge {

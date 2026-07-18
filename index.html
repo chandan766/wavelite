@@ -165,6 +165,17 @@
         </div>
       </div>
 
+      <!-- Modern file attachment panel (above chat input) -->
+      <div id="file-attachment-panel" class="file-attachment-panel d-none">
+        <div id="file-list"></div>
+        <div class="file-send-bar">
+          <span id="file-count-badge" class="file-count-badge"></span>
+          <button id="btn-clear-all-files" class="btn-clear-all" title="Clear all files">
+            <i class="fas fa-trash-can"></i> Clear all
+          </button>
+        </div>
+      </div>
+
       <div id="text-input-group">
         <button id="btn-toggle" title="Attachments">
           <i class="fas fa-plus"></i>
@@ -197,21 +208,6 @@
         </button>
       </div>
 
-      <!-- Modern file attachment panel -->
-      <div id="file-attachment-panel" class="file-attachment-panel d-none">
-        <div id="file-list"></div>
-        <div class="file-send-bar">
-          <span id="file-count-badge" class="file-count-badge"></span>
-          <div class="file-send-actions">
-            <button id="btn-clear-all-files" class="btn-clear-all" title="Clear all files">
-              <i class="fas fa-trash-can"></i> Clear all
-            </button>
-            <button id="btn-send-all-files" class="btn-send-all" title="Send all files">
-              <i class="fas fa-paper-plane"></i> Send all
-            </button>
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Attachment Menu -->
@@ -737,7 +733,6 @@
       var fileList = document.getElementById('file-list');
       var countBadge = document.getElementById('file-count-badge');
       var clearAllBtn = document.getElementById('btn-clear-all-files');
-      var sendAllBtn = document.getElementById('btn-send-all-files');
 
       /* ---- Keep text input always visible, hide media group ---- */
       if (mediaGroup) mediaGroup.classList.add('d-none');
@@ -922,6 +917,7 @@
           } else {
             sending = false;
             window._wlSending = false;
+            clearAttachmentPanel();
           }
         }, 500);
       };
@@ -942,29 +938,26 @@
         sm.click();
       }
 
-      /* ---- Wire "Send all" button ---- */
-      var sendAllBtn = document.getElementById('btn-send-all-files');
-      if (sendAllBtn) {
-        sendAllBtn.addEventListener('click', function () {
-          /* Capture files from the global selectedFiles array */
-          var sf = [];
-          var sc = document.querySelector('.file-card-name');
-          /* We need to access selectedFiles from the other IIFE — use a shared global */
+      /* ---- Clear attachment panel (keeps file selection until send is done) ---- */
+      function clearAttachmentPanel() {
+        var panel = document.getElementById('file-attachment-panel');
+        var list = document.getElementById('file-list');
+        var badge = document.getElementById('file-count-badge');
+        var fn = document.getElementById('selected-file-name');
+        if (panel) panel.classList.add('d-none');
+        if (list) list.innerHTML = '';
+        if (badge) badge.textContent = '';
+        if (fn) fn.textContent = 'No file selected';
+      }
+
+      /* ---- Wire Send button for sequential file send ---- */
+      var sendBtn = document.getElementById('btn-send-text');
+      if (sendBtn) {
+        sendBtn.addEventListener('click', function () {
           var src = window._wlSelectedFiles;
-          if (src && src.length > 0) {
-            sf = src.slice();
-            src.length = 0;
-            /* Also clear file panel */
-            var panel = document.getElementById('file-attachment-panel');
-            var list = document.getElementById('file-list');
-            if (panel) panel.classList.add('d-none');
-            if (list) list.innerHTML = '';
-            var badge = document.getElementById('file-count-badge');
-            if (badge) badge.textContent = '';
-            var fn = document.getElementById('selected-file-name');
-            if (fn) fn.textContent = 'No file selected';
-          }
-          if (sf.length === 0) return;
+          if (!src || src.length === 0) return;
+          var sf = src.slice();
+          src.length = 0;
           fileQueue = sf;
           sending = true;
           window._wlSending = true;
