@@ -81,7 +81,7 @@
         </div>
         <span class="landing-logo-text">WaveLite</span>
       </div>
-      <p class="landing-tagline">Peer-to-peer messaging, reimagined</p>
+      <p class="landing-tagline" id="landingTagline">Peer-to-peer messaging, reimagined</p>
 
       <!-- Connection Circle — The Signature Element -->
       <div class="connection-circle-wrapper">
@@ -89,6 +89,13 @@
         <div class="connection-circle" id="connectionCircle">
           <div class="connection-ring"></div>
           <div class="connection-ripple"></div>
+          <div class="connection-fill" id="connectionFill">
+            <div class="fill-water" id="fillWater">
+              <svg viewBox="0 0 560 40" preserveAspectRatio="none" class="wave-top-svg">
+                <path d="M0,20 Q35,5 70,20 Q105,35 140,20 Q175,5 210,20 Q245,35 280,20 Q315,5 350,20 Q385,35 420,20 Q455,5 490,20 Q525,35 560,20 L560,40 L0,40 Z"/>
+              </svg>
+            </div>
+          </div>
           <div class="connection-inner">
             <i class="fas fa-plug connection-icon" id="connectionCircleIcon"></i>
             <span class="connection-status-text" id="connectionCircleStatus">Ready</span>
@@ -99,9 +106,6 @@
 
       <!-- Actions — Fewer, purposeful -->
       <div class="landing-actions" id="landingActions">
-        <button type="button" class="btn-connect" id="landingConnectBtn">
-          <i class="fas fa-plug me-2"></i>Connect
-        </button>
         <button type="button" class="btn-secondary-action" id="landingJoinBtn">
           <i class="fas fa-right-to-bracket"></i>Join as Peer
         </button>
@@ -505,6 +509,51 @@
     (function () {
       var timerInterval = null;
       var seconds = 0;
+      var taglineEl = document.getElementById('landingTagline');
+      var originalTagline = taglineEl ? taglineEl.textContent : '';
+      var fillWater = document.getElementById('fillWater');
+
+      var statusMap = {
+        'Connecting...': 'Connecting...',
+        'Offer Creating...': 'Establishing Secure Connection...',
+        'Waiting for peer...': 'Searching for Peer...',
+        'ICE Gathering...': 'Verifying Session...',
+        'Submitting offer...': 'Connecting...',
+        'offer Submitted': 'Connecting...',
+        'Connected Successfully!': 'Connected Successfully',
+        'Waiting for offer...': 'Searching for Peer...',
+        'Joined Successfully': 'Connected Successfully',
+        'Joining...': 'Connecting...',
+      };
+
+      function setTagline(text, animate) {
+        if (!taglineEl) return;
+        if (animate) {
+          taglineEl.style.opacity = '0';
+          taglineEl.style.transform = 'translateY(8px)';
+          setTimeout(function () {
+            taglineEl.textContent = text;
+            taglineEl.style.opacity = '1';
+            taglineEl.style.transform = 'translateY(0)';
+          }, 300);
+        } else {
+          taglineEl.textContent = text;
+        }
+      }
+
+      function resetTagline() {
+        setTagline(originalTagline, true);
+      }
+
+      function setFillLevel(percent) {
+        if (!fillWater) return;
+        var h = Math.min(100, Math.max(0, percent));
+        fillWater.style.height = h + '%';
+      }
+
+      function resetFill() {
+        setFillLevel(0);
+      }
 
       function startTimer(mode) {
         seconds = 0;
@@ -539,21 +588,26 @@
         icon.className = 'fas fa-check connection-icon';
         status.textContent = 'Connected';
         timer.textContent = '';
+        setFillLevel(100);
+        setTimeout(function () { resetTagline(); }, 600);
       }
 
-      document.getElementById('landingConnectBtn').addEventListener('click', function () {
+      document.getElementById('connectionCircle').addEventListener('click', function () {
+        if (this.classList.contains('searching') || this.classList.contains('connected')) return;
         document.getElementById('peerIdSubmit').click();
         document.getElementById('landingActions').style.display = 'none';
         startTimer('connect');
+        setTagline('Initializing...', true);
       });
 
       document.getElementById('landingJoinBtn').addEventListener('click', function () {
         document.getElementById('joinPeer').click();
         document.getElementById('landingActions').style.display = 'none';
         startTimer('join');
+        setTagline('Initializing...', true);
       });
 
-      var observer = new MutationObserver(function (mutations) {
+      var chatObs = new MutationObserver(function (mutations) {
         mutations.forEach(function (m) {
           if (m.attributeName === 'class') {
             var el = document.getElementById('chat-section');
@@ -565,8 +619,38 @@
       });
       var chatSection = document.getElementById('chat-section');
       if (chatSection) {
-        observer.observe(chatSection, { attributes: true, attributeFilter: ['class'] });
+        chatObs.observe(chatSection, { attributes: true, attributeFilter: ['class'] });
       }
+
+      var origUCS = window.updateConnectionStatus;
+      window.updateConnectionStatus = function (message, percent, isFinal) {
+        if (origUCS) origUCS(message, percent, isFinal);
+        setFillLevel(percent);
+        if (message && statusMap[message]) {
+          setTagline(statusMap[message], true);
+        }
+      };
+
+      var origAlert = window.showAlert;
+      window.showAlert = function (message, isError) {
+        if (origAlert) origAlert(message, isError);
+        if (isError !== false) {
+          var circle = document.getElementById('connectionCircle');
+          if (circle && circle.classList.contains('searching')) {
+            setTimeout(function () {
+              circle.classList.remove('searching');
+              resetFill();
+              resetTagline();
+              var icon = document.getElementById('connectionCircleIcon');
+              var st = document.getElementById('connectionCircleStatus');
+              var tmr = document.getElementById('connectionCircleTimer');
+              if (icon) icon.className = 'fas fa-plug connection-icon';
+              if (st) st.textContent = 'Ready';
+              if (tmr) tmr.textContent = '';
+            }, 2000);
+          }
+        }
+      };
     })();
   </script>
 
@@ -657,6 +741,65 @@
         });
       }
     });
+  </script>
+
+  <!-- File Upload Progress Overlay -->
+  <script>
+    (function () {
+      var chatDisplay = document.getElementById('chat-display');
+      if (!chatDisplay) return;
+
+      var obs = new MutationObserver(function (mutations) {
+        mutations.forEach(function (m) {
+          m.addedNodes.forEach(function (node) {
+            if (node.nodeType !== 1 || !node.id || !node.id.startsWith('progress-')) return;
+            var mid = node.id.replace('progress-', '');
+            var prev = node.previousElementSibling;
+
+            if (prev && prev.classList.contains('chat-message')) {
+              prev.style.position = 'relative';
+              prev.classList.add('file-uploading');
+              var ov = document.createElement('div');
+              ov.className = 'upload-overlay';
+              ov.innerHTML = '<div class="upload-progress-ring"><svg viewBox="0 0 100 100"><circle class="ring-bg" cx="50" cy="50" r="42"/><circle class="ring-fill" cx="50" cy="50" r="42" data-mid="' + mid + '"/></svg><span class="upload-percent" data-mid="' + mid + '">0%</span></div>';
+              prev.appendChild(ov);
+              node.style.display = 'none';
+            } else {
+              node.classList.add('progress-premium');
+            }
+          });
+        });
+      });
+      obs.observe(chatDisplay, { childList: true });
+
+      var origUPB = window.updateProgressBar;
+      window.updateProgressBar = function (messageId, percentage) {
+        if (origUPB) origUPB(messageId, percentage);
+        var ring = document.querySelector('.ring-fill[data-mid="' + messageId + '"]');
+        var pct = document.querySelector('.upload-percent[data-mid="' + messageId + '"]');
+        var r = Math.min(100, Math.round(percentage));
+        if (ring) {
+          var rad = 42;
+          var circ = 2 * Math.PI * rad;
+          ring.style.strokeDasharray = circ;
+          ring.style.strokeDashoffset = circ - (r / 100) * circ;
+        }
+        if (pct) pct.textContent = r + '%';
+      };
+
+      var origHPB = window.hideProgressBar;
+      window.hideProgressBar = function (messageId) {
+        var upl = document.querySelector('.file-uploading');
+        if (upl) {
+          var ov = upl.querySelector('.upload-overlay');
+          if (ov) {
+            ov.classList.add('fade-out');
+            setTimeout(function () { ov.remove(); upl.classList.remove('file-uploading'); }, 400);
+          }
+        }
+        if (origHPB) origHPB(messageId);
+      };
+    })();
   </script>
 </body>
 

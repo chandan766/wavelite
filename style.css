@@ -1511,6 +1511,195 @@ img { max-width: 100%; height: auto; }
 }
 
 /* ============================================
+   CONNECTION FILL — Wave animation inside circle
+   ============================================ */
+.connection-fill {
+  position: absolute;
+  inset: 8px;
+  border-radius: 50%;
+  overflow: hidden;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.5s var(--wl-ease);
+  pointer-events: none;
+}
+
+.connection-circle.searching .connection-fill,
+.connection-circle.connected .connection-fill {
+  opacity: 1;
+}
+
+.fill-water {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 0;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.12) 0%, rgba(37, 99, 235, 0.28) 100%);
+  transition: height 0.8s var(--wl-ease);
+}
+
+.connection-circle.connected .fill-water {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.12) 0%, rgba(16, 185, 129, 0.28) 100%);
+}
+
+.wave-top-svg {
+  position: absolute;
+  top: -18px;
+  left: 0;
+  width: 200%;
+  height: 36px;
+  animation: wave-top-drift 3s linear infinite;
+}
+
+.wave-top-svg path {
+  fill: rgba(37, 99, 235, 0.18);
+}
+
+.connection-circle.connected .wave-top-svg path {
+  fill: rgba(16, 185, 129, 0.18);
+}
+
+@keyframes wave-top-drift {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Ready pulse on circle */
+.connection-circle:not(.searching):not(.connected) {
+  animation: ready-pulse 3s ease-in-out infinite;
+}
+
+.connection-circle.searching,
+.connection-circle.connected {
+  animation: none;
+}
+
+@keyframes ready-pulse {
+  0%, 100% { filter: drop-shadow(0 0 0 transparent); }
+  50% { filter: drop-shadow(0 0 14px rgba(37, 99, 235, 0.12)); }
+}
+
+/* ============================================
+   UPLOAD PROGRESS OVERLAY
+   ============================================ */
+.upload-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border-radius: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  animation: overlay-in 0.3s var(--wl-ease);
+}
+
+.upload-overlay.fade-out {
+  animation: overlay-out 0.4s var(--wl-ease) forwards;
+}
+
+.upload-progress-ring {
+  position: relative;
+  width: 72px;
+  height: 72px;
+}
+
+.upload-progress-ring svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ring-bg {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 5;
+}
+
+.ring-fill {
+  fill: none;
+  stroke: white;
+  stroke-width: 5;
+  stroke-linecap: round;
+  stroke-dasharray: 264;
+  stroke-dashoffset: 264;
+  transition: stroke-dashoffset 0.3s var(--wl-ease);
+}
+
+.upload-percent {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+@keyframes overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.file-uploading .message,
+.file-uploading .message-meta {
+  filter: blur(2px);
+  transition: filter 0.3s var(--wl-ease);
+}
+
+/* Premium progress for receiver */
+.progress-premium {
+  background: var(--wl-surface) !important;
+  border: 1px solid var(--wl-border-subtle) !important;
+  border-radius: var(--wl-r) !important;
+  padding: 16px 20px !important;
+  box-shadow: var(--wl-shadow-sm);
+  max-width: 70%;
+}
+
+.progress-premium .file-name {
+  color: var(--wl-text);
+  margin-bottom: 12px;
+}
+
+.progress-premium .progress {
+  display: block !important;
+  height: 4px !important;
+  border-radius: 99px !important;
+  background: var(--wl-slate-100) !important;
+  overflow: hidden;
+  border: none !important;
+}
+
+.progress-premium .progress-bar {
+  background: linear-gradient(90deg, var(--wl-blue), var(--wl-cyan)) !important;
+  border-radius: 99px !important;
+  transition: width 0.3s var(--wl-ease) !important;
+}
+
+.progress-premium .progress-percentage {
+  font-size: 0.72rem;
+  color: var(--wl-text-secondary);
+  margin-top: 6px;
+  display: block;
+  text-align: right;
+}
+
+/* Hide old connection status panel */
+#connectionStatusPanel {
+  display: none !important;
+}
+
+/* ============================================
    UTILITY
    ============================================ */
 .d-none { display: none !important; }
@@ -1741,6 +1930,21 @@ img { max-width: 100%; height: auto; }
   }
 
   .accordion-body { color: #CBD5E1; }
+
+  .progress-premium {
+    background: #1E293B !important;
+    border-color: #334155 !important;
+  }
+
+  .progress-premium .file-name { color: #E2E8F0; }
+
+  .progress-premium .progress {
+    background: #0B1120 !important;
+  }
+
+  .upload-overlay {
+    background: rgba(0, 0, 0, 0.5);
+  }
 }
 
 /* ============================================
