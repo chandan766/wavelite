@@ -1,1 +1,176 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Feedback - WaveLite Chat</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><link rel="stylesheet" href="style.css"><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet"><link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet"><style> html, body { height: 100%; margin: 0; padding: 0; background-color: var(--wl-bg, #1a2b2e); scroll-behavior: smooth; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: auto !important; } header { position: fixed; width: 100%; z-index: 1000; padding: 15px 0; } main { padding-top: 80px; padding-bottom: 60px; } .info-box { color: var(--wl-cyan); font-size: 0.85rem; font-style: italic; border-radius: 10px; } .card { margin-bottom: 1rem; } .input-group-text { background: rgba(255,255,255,0.06);color: var(--wl-mint); border: 1px solid rgba(224,247,250,0.18); border-right: none; border-radius: 12px 0 0 12px; color: var(--wl-cyan); } .form-control { border-radius: 0 12px 12px 0; } .form-control::placeholder { color: rgba(224,247,250,0.6) !important; } textarea.form-control::placeholder { color: rgba(224,247,250,0.6) !important; } .btn-primary { border: 0; } .footer { background: rgba(8,15,16,0.55); color: var(--wl-cyan); font-size: 0.85rem; padding: 20px 0; border-top: 1px solid rgba(224,247,250,0.15); } .footer a { color: #666; text-decoration: none; } .footer a:hover { text-decoration: underline; } .floating-buttons { position: fixed; bottom: 20px; right: 20px; z-index: 999; display: none; } .custom-btn { border-radius: 50%; width: 45px; height: 45px; padding: 10px; display: flex; align-items: center; justify-content: center; } </style></head><body><header class="header custom-bg"><div class="container"><div class="d-flex align-items-center"><a href="index.html" class="fs-6 me-2 custom-fg"><i class="fa-solid fa-angle-left"></i></a><span class="fw-bold fs-6 d-flex align-items-center custom-fg"><i class="fa-solid fa-comment-dots me-2"></i> Feedback</span></div></div></header><script type="text/javascript"> var submitted = false; function contact() { window.location.reload(); } window.addEventListener('scroll', function () { const scrollBtn = document.querySelector('.floating-buttons'); if (window.scrollY > 200) { scrollBtn.style.display = 'block'; } else { scrollBtn.style.display = 'none'; } });</script><main class="container"><div class="card wl-tech-card p-3"><div class="card wl-tech-card info-box p-2"><ul class="mb-0"><li>Provide specific examples to make your feedback clear and actionable.</li><li>Be honest and respectful in your comments.</li><li>Highlight both positive aspects and areas for improvement.</li><li>Include your email if you wish to receive a response or follow-up.</li></ul></div></div><div class="card wl-tech-card p-4"><form id="feedbackForm" onsubmit="handleFeedbackSubmit(event);"><div class="mb-3"><label class="form-label">Full Name</label><div class="input-group"><span class="input-group-text"><i class="bi bi-person-fill" style="color: var(--wl-neon) !important;"></i></span><input type="text" class="form-control" name="entry.389100388" placeholder="Your Name" minlength="3" maxlength="120" pattern="\S{3,120}" title="Name must be between 3 to 120 characters with no spaces" required></div></div><div class="mb-3"><label class="form-label">Email</label><div class="input-group"><span class="input-group-text"><i class="bi bi-envelope-fill" style="color: var(--wl-neon) !important;"></i></span><input type="email" class="form-control" name="entry.156454504" placeholder="example@mail.com" minlength="6" maxlength="120" pattern="^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$" title="Enter a valid email address without spaces"></div></div><div class="mb-3"><label class="form-label">Message</label><textarea class="form-control" name="entry.1632400053" rows="4" required placeholder="Write your feedback here..." minlength="10" maxlength="1000" pattern="^(?!\\s*$).{10,1000}$" title="Feedback must be 10 to 1000 characters and cannot be empty or only whitespace."></textarea></div><button type="submit" class="btn btn-primary w-100">Submit</button></form></div></main><div class="floating-buttons"><a href="#" class="btn custom-btn"><i class="bi bi-arrow-up"></i></a></div><script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script><script>function handleFeedbackSubmit(event) { event.preventDefault(); const formData = new FormData(event.target); const name = formData.get('entry.389100388'); const email = formData.get('entry.1234567890'); const message = formData.get('entry.0987654321'); if (!name || !email || !message) { alert('Please fill in all required fields.'); return; } alert('Thank you for your feedback! Your message has been received.'); event.target.reset();}document.addEventListener('DOMContentLoaded', function() { const form = document.getElementById('feedbackForm'); if (form) { const nameInput = form.querySelector('input[name="entry.389100388"]'); if (nameInput) nameInput.name = 'name'; const emailInput = form.querySelector('input[name="entry.1234567890"]'); if (emailInput) emailInput.name = 'email'; const messageInput = form.querySelector('textarea[name="entry.0987654321"]'); if (messageInput) messageInput.name = 'message'; }});</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Feedback - WaveLite Chat</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .feedback-tips {
+      background: var(--wl-blue-pale);
+      border: 1px solid var(--wl-border-subtle);
+      border-radius: var(--wl-r);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+    }
+
+    .feedback-tips ul {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .feedback-tips li {
+      padding: 4px 0;
+      font-size: 0.85rem;
+      color: var(--wl-slate-600);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .feedback-tips li i {
+      color: var(--wl-blue);
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <header class="header scrolled">
+    <div class="page-nav">
+      <i class="fa-solid fa-angle-left back-icon" onclick="window.location.href='index.html'"></i>
+      <span><i class="fa-solid fa-comment-dots"></i>Feedback</span>
+    </div>
+  </header>
+
+  <div class="page-shell">
+    <div class="wave-bg">
+      <svg class="wave-1" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <path fill="rgba(37,99,235,0.08)" d="M0,224L48,213.3C96,203,192,181,288,186.7C384,192,480,224,576,234.7C672,245,768,235,864,208C960,181,1056,139,1152,133.3C1248,128,1344,160,1392,176L1440,192L1440,320L0,320Z"/>
+      </svg>
+      <svg class="wave-2" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <path fill="rgba(6,182,212,0.06)" d="M0,288L48,272C96,256,192,224,288,213.3C384,203,480,213,576,229.3C672,245,768,267,864,261.3C960,256,1056,224,1152,208C1248,192,1344,192,1392,192L1440,192L1440,320L0,320Z"/>
+      </svg>
+      <svg class="wave-3" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <path fill="rgba(37,99,235,0.04)" d="M0,256L48,261.3C96,267,192,277,288,272C384,267,480,245,576,224C672,203,768,181,864,192C960,203,1056,245,1152,256C1248,267,1344,245,1392,234.7L1440,224L1440,320L0,320Z"/>
+      </svg>
+    </div>
+    <div class="landing-orb orb-1"></div>
+    <div class="landing-orb orb-2"></div>
+
+    <main class="container" style="max-width:540px; position:relative; z-index:2;">
+      <div class="page-section">
+        <div class="feedback-tips">
+          <ul>
+            <li><i class="fas fa-lightbulb"></i>Provide specific examples to make your feedback clear and actionable.</li>
+            <li><i class="fas fa-heart"></i>Be honest and respectful in your comments.</li>
+            <li><i class="fas fa-star"></i>Highlight both positive aspects and areas for improvement.</li>
+            <li><i class="fas fa-envelope"></i>Include your email if you wish to receive a response.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="page-section">
+        <div class="wl-card">
+          <form id="feedbackForm" onsubmit="handleFeedbackSubmit(event);">
+            <div class="mb-3">
+              <label class="form-label">Full Name</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="fas fa-user" style="color:var(--wl-blue);"></i></span>
+                <input type="text" class="form-control" name="entry.389100388" placeholder="Your name" minlength="3"
+                  maxlength="120" pattern="\S{3,120}"
+                  title="Name must be between 3 to 120 characters with no spaces" required>
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label class="form-label">Email</label>
+              <div class="input-group">
+                <span class="input-group-text"><i class="fas fa-envelope" style="color:var(--wl-blue);"></i></span>
+                <input type="email" class="form-control" name="entry.156454504" placeholder="you@example.com" minlength="6"
+                  maxlength="120" pattern="^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+                  title="Enter a valid email address without spaces">
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="form-label">Message</label>
+              <textarea class="form-control" name="entry.1632400053" rows="5" required
+                placeholder="Write your feedback here..." minlength="10" maxlength="1000"
+                pattern="^(?!\\s*$).{10,1000}$"
+                title="Feedback must be 10 to 1000 characters and cannot be empty or only whitespace."
+                style="resize:vertical;"></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary w-100">
+              <i class="fas fa-paper-plane me-1"></i>Submit Feedback
+            </button>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <button class="scroll-top-btn" id="scrollTopBtn" onclick="document.querySelector('.page-shell').scrollTo({top:0,behavior:'smooth'});">
+    <i class="fas fa-arrow-up"></i>
+  </button>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script>
+    function handleFeedbackSubmit(event) {
+      event.preventDefault();
+      var formData = new FormData(event.target);
+      var name = formData.get('entry.389100388');
+      var email = formData.get('entry.1234567890');
+      var message = formData.get('entry.0987654321');
+
+      if (!name || !email || !message) {
+        alert('Please fill in all required fields.');
+        return;
+      }
+
+      alert('Thank you for your feedback! Your message has been received.');
+      event.target.reset();
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+      var form = document.getElementById('feedbackForm');
+      if (form) {
+        var nameInput = form.querySelector('input[name="entry.389100388"]');
+        if (nameInput) nameInput.name = 'name';
+        var emailInput = form.querySelector('input[name="entry.1234567890"]');
+        if (emailInput) emailInput.name = 'email';
+        var messageInput = form.querySelector('textarea[name="entry.0987654321"]');
+        if (messageInput) messageInput.name = 'message';
+      }
+
+      var page = document.querySelector('.page-shell');
+      var scrollBtn = document.getElementById('scrollTopBtn');
+      if (page && scrollBtn) {
+        page.addEventListener('scroll', function () {
+          scrollBtn.style.display = page.scrollTop > 200 ? 'flex' : 'none';
+        });
+      }
+
+      var sections = document.querySelectorAll('.page-section');
+      var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+          }
+        });
+      }, { threshold: 0.15 });
+      sections.forEach(function (section) {
+        observer.observe(section);
+      });
+    });
+  </script>
+</body>
+
+</html>

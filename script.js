@@ -1,60 +1,1091 @@
-const SIGNALING_URL='/signaling';let localConnection,dataChannel;let pollingInterval;let isManuallyConnecting=!1;let peerId=null;let mediaSendQueue=[];let isSendingFile=!1;let pingIntervalId=null;let mediaChannels=[];let mediaReceivingChunks={};let lastPingReceivedTime=Date.now();const CONNECTION_TIMEOUT=120000;const CHUNK_TIMEOUT=5000;const MAX_RETRIES=5;const NUM_MEDIA_CHANNELS=3;const PING_INTERVAL=10000;const CHUNK_SIZE=65536;const BUFFER_THRESHOLD=262144;let fileReader=new FileReader();let currentFile=null;let retryCounts=new Map();let activeTransfers=new Map();const receivedTransfers=new Map();$(document).ready(()=>{let savedProfilePeerId=localStorage.getItem("peerIds")||"";let savedProfilePeerName=localStorage.getItem("peerName")||"";if(savedProfilePeerName){$("#chat-username").val(savedProfilePeerName);$("#peer-id").val(savedProfilePeerId)}
-$("#peerIdSubmit").click(async function(e){e.preventDefault();isManuallyConnecting=!0;var username=$("#chat-username").val().trim();peerId=$("#peer-id").val().trim();$("#chat-username").prop("disabled",!0);$("#peer-id").prop("disabled",!0);$("#name-error").text("");$("#peer-error").text("");let hasError=!1;if(!username){username="Anonymous"}
-if(!peerId){peerId="peer123"}
-if(hasError){return}
-$("#peerIdSubmit").prop("disabled",!0).text("Connecting...");$("#joinPeer").prop("disabled",!0).text("Join");$("#peerId").val(peerId);$("#peerBtnGroup").removeClass("d-flex").addClass("d-none");$("#connectionStatusPanel").removeClass("d-none");updateConnectionStatus("Connecting...","5",!1);startConnection(peerId,"connect")});$("#media-input-group").change((event)=>{const file=event.target.files[0];if(file){currentFile=file}else{currentFile=null}});$("#btn-send-media").click(()=>{if(!currentFile){showAlert("No file is selected!");$("#media-input").click();return}
-const queueId=`queue-${Date.now()}`;const fileToSend={file:currentFile,queueId:queueId,};if(isSendingFile||mediaSendQueue.length>0){showQueuedProgress(queueId,currentFile.name)}
-currentFile=null;$("#chat-file").val("");mediaSendQueue.push(fileToSend);if(!isSendingFile){processNextFileInQueue()}});$("#reloadBtn").click(function(){location.reload()});$("#btn-send-text").click(()=>{const name=$("#chat-username").val()||"Anonymous";const message=$("#chat-message").val();const messageId=Date.now().toString();if(message&&dataChannel&&dataChannel.readyState==="open"){console.log("Sending text message, dataChannel state:",dataChannel.readyState);try{dataChannel.send(JSON.stringify({type:"text",name,message,messageId}));displayMessage(name,message,!0,"text",null,messageId,"sent");$("#chat-message").val("").focus()}catch(error){console.error("Error sending text message:",error);showAlert("Failed to send message. Please try again.")}}else{console.warn("Cannot send text, dataChannel state:",dataChannel?dataChannel.readyState:"undefined");showAlert("Please wait until the connection is established before sending a message.")}});$("#delete-all-btn").click(()=>{console.log('🗑️ Global cleanup requested');fetch(SIGNALING_URL,{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({type:"cleanup",peerId:""}),}).then((res)=>res.json()).then((result)=>{console.log('✅ Global cleanup completed:',result);showAlert(`Deleted all SDP entries: ${result.message}`,!1);setTimeout(()=>{location.reload()},3000)}).catch((err)=>{console.error('❌ Global cleanup error:',err);showAlert(`Error deleting SDP entries: ${err}`)})});$("#joinPeer").click(async function(e){e.preventDefault();isManuallyConnecting=!0;const username=$("#chat-username").val().trim();peerId=$("#peer-id").val().trim();$("#chat-username").prop("disabled",!0);$("#peer-id").prop("disabled",!0);$("#name-error").text("");$("#peer-error").text("");let hasError=!1;if(!username){$("#name-error").text("Name is required");$("#chat-username").prop("disabled",!1);$("#peer-id").prop("disabled",!1);hasError=!0}
-if(!peerId){$("#peer-error").text("Peer ID is required");$("#chat-username").prop("disabled",!1);$("#peer-id").prop("disabled",!1);hasError=!0}
-if(hasError){return}
-$("#joinPeer").prop("disabled",!0).text("Joining...");$("#peerIdSubmit").prop("disabled",!0).text("Connect");$("#peerId").val(peerId);$("#peerBtnGroup").removeClass("d-flex").addClass("d-none");$("#connectionStatusPanel").removeClass("d-none");updateConnectionStatus("Joining...","5",!1);startConnection(peerId,"join")});$("#confirmSavePeerBtn").click(async()=>{const peerIdInput=$("#peerIdToSave").val().trim();const peerNameInput=$("#peerNameToSave").val().trim();const alertBox=$("#save-peer-alert");alertBox.addClass("d-none").text("");if(!peerIdInput||!peerNameInput){alertBox.text("Peer ID or Name cannot be empty").removeClass("d-none");return}
-localStorage.setItem("peerIds",peerIdInput);localStorage.setItem("peerName",peerNameInput);showAlert(`Peer ID "${peerIdInput}" saved for notifications.`,!1);const permission=await Notification.requestPermission();if(permission!=="granted"){alertBox.text("Notification permission denied. Cannot able to notify the joining request").removeClass("d-none");return}
-$("#savePeerModal").modal("hide")});$("#settingBtn").click(function(){const savedPeers=localStorage.getItem("peerIds")||"";const savedPeersName=localStorage.getItem("peerName")||"";if(savedPeers){$("#peerIdToSave").val(savedPeers);$("#peerNameToSave").val(savedPeersName)}
-loadStunSettings();loadApiKey()});$(document).on("change",".stun-option",()=>{const selected=$(".stun-option:checked").map(function(){return this.value}).get();if(selected.length<1){$("#stun-error").removeClass("d-none")}else{$("#stun-error").addClass("d-none");localStorage.setItem("selectedStunServers",JSON.stringify(selected));$("#stunSaveStatus").text(" ( Saved Successfully! )");setTimeout(()=>{$("#stunSaveStatus").text("")},3000)}});let hasPrompted=!1;window.autoCheckInterval=setInterval(async()=>{if(isManuallyConnecting||hasPrompted)return;const savedPeers=localStorage.getItem("peerIds")||"peer123";const savedPeerName=localStorage.getItem("peerName")||"Anonymous";if(!savedPeers)return;const offer=await fetchSDP(savedPeers,"offer");if(offer){if(Notification.permission==="granted"&&document.visibilityState!=="visible"){const notification=new Notification("Wavelite",{body:`Peer "${savedPeers}" is requesting to connect.`,icon:"/logo.png",});notification.onclick=function(event){event.preventDefault();window.focus();$("#autoJoinMessage").text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);const autoJoinModal=new bootstrap.Modal(document.getElementById("autoJoinModal"));autoJoinModal.show();$("#autoJoinConfirmBtn").off("click").on("click",()=>{autoJoinModal.hide();setTimeout(()=>{isManuallyConnecting=!0;$("#peer-id").val(savedPeers);$("#chat-username").val(savedPeerName);$("#joinPeer").click()},300)})}}else if(Notification.permission!=="denied"){Notification.requestPermission().then((permission)=>{if(permission==="granted"&&document.visibilityState!=="visible"){new Notification("Wavelite",{body:`Peer "${savedPeers}" is requesting to connect.`,icon:"/logo.png",})}})}
-hasPrompted=!0;if(document.visibilityState==="visible"){$("#autoJoinMessage").text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);const autoJoinModal=new bootstrap.Modal(document.getElementById("autoJoinModal"));autoJoinModal.show();$("#autoJoinConfirmBtn").off("click").on("click",()=>{autoJoinModal.hide();setTimeout(()=>{isManuallyConnecting=!0;$("#peer-id").val(savedPeers);$("#chat-username").val(savedPeerName);$("#joinPeer").click()},300)})}
-return}},3000)});async function startConnection(peerId,mode="connect"){console.log(`🚀 Starting connection for peerId: ${peerId} (mode: ${mode})`);console.log(`🔍 Checking for existing offers...`);const offerEntry=await fetchSDP(peerId,"offer");console.log(`🔍 fetchSDP result:`,offerEntry);if(offerEntry&&offerEntry.found){console.log(`✅ Offer found for peerId: ${peerId}, acting as answerer`);console.log(`📦 Offer data:`,offerEntry);await setupAnswerer(offerEntry)}else{console.log(`❌ No offer found for peerId: ${peerId}, offerEntry:`,offerEntry);if(mode==="join"){console.log(`❌ No offer found for peerId: ${peerId}, starting to poll for offers (Join mode)`);startJoinConnection(peerId)}else{console.log(`❌ No offer found for peerId: ${peerId}, acting as offerer (Connect mode)`);await setupOfferer(peerId)}}}
-async function setupOfferer(peerId){console.log(`🔄 Setting up offerer for peerId: ${peerId}`);localConnection=createPeerConnection();dataChannel=localConnection.createDataChannel("chat");mediaChannels=[];for(let i=0;i<NUM_MEDIA_CHANNELS;i++){const channel=localConnection.createDataChannel(`media-${i}`);setupMediaDataChannel(channel,i);mediaChannels.push(channel)}
-setupDataChannel();updateConnectionStatus("Offer Creating...","10",!1);try{console.log("🔄 Creating offer...");const offer=await localConnection.createOffer();console.log("✅ Offer created successfully");console.log("📦 Offer SDP:",JSON.stringify(offer).substring(0,100)+"...");await localConnection.setLocalDescription(offer);console.log("✅ Local offer description set successfully");console.log("⏳ Waiting for ICE gathering to complete...");await waitForIceGathering(localConnection);console.log("✅ ICE gathering completed");console.log(`📤 Submitting offer SDP for peerId: ${peerId}`);console.log("📦 Final offer SDP:",JSON.stringify(localConnection.localDescription).substring(0,100)+"...");await submitSDP(peerId,"offer",JSON.stringify(localConnection.localDescription));console.log("✅ Offer SDP submitted successfully!");updateConnectionStatus("Waiting for peer...","100",!0);let startTime=Date.now();let pollCount=0;console.log(`⏰ Started polling for answers (timeout: ${CONNECTION_TIMEOUT/1000}s, interval: 3s)`);pollingInterval=setInterval(async()=>{pollCount++;const elapsed=Date.now()-startTime;console.log(`🔍 Poll #${pollCount} for answer (elapsed: ${Math.round(elapsed/1000)}s)`);if(elapsed>CONNECTION_TIMEOUT){console.log(`⏰ Connection timeout reached (${CONNECTION_TIMEOUT/1000}s), stopping polling`);clearInterval(pollingInterval);$("#peerIdSubmit").prop("disabled",!1).text("Connect");$("#joinPeer").prop("disabled",!1).text("Join");showAlert("Connection timed out. Please try again or check peer ID.");$("#delete-all-btn").click();return}
-const answerEntry=await fetchSDP(peerId,"answer");const percent=Math.min((elapsed/CONNECTION_TIMEOUT)*100,99);updateConnectionStatus("Waiting for peer...",percent,!0);if(answerEntry){console.log(`✅ Answer SDP found for peerId: ${peerId} on poll #${pollCount}`);console.log(`🛑 Stopping polling for answers`);clearInterval(pollingInterval);try{console.log(`📦 Processing answer SDP...`);const sdp=JSON.parse(answerEntry.sdp);await localConnection.setRemoteDescription(new RTCSessionDescription(sdp));updateConnectionStatus("Connected Successfully!","100",!0);console.log("✅ Remote description (answer) set successfully");console.log(`🎉 Connection established successfully!`);console.log(`🗑️ Cleaning up signaling data after successful connection`);deletePeerFromSheet(peerId)}catch(error){console.error("❌ Failed to set remote description (answer):",error)}}else{console.log(`❌ No answer SDP found yet for peerId: ${peerId} (poll #${pollCount})`)}},4000)}catch(error){console.error("Error setting up offerer:",error);$("#peerIdSubmit").prop("disabled",!1).text("Connect");$("#joinPeer").prop("disabled",!1).text("Join");showAlert("Failed to establish connection. Please try again.")}}
-async function setupAnswerer(offerEntry){localConnection=createPeerConnection();localConnection.ondatachannel=(event)=>{const channel=event.channel;if(channel.label==="chat"){dataChannel=channel;setupDataChannel()}else if(channel.label.startsWith("media-")){const index=parseInt(channel.label.split("-")[1]);if(!isNaN(index)){mediaChannels[index]=channel;setupMediaDataChannel(channel,index)}}};try{console.log("Parsing and setting remote offer...");const offerSDP=JSON.parse(offerEntry.sdp);await localConnection.setRemoteDescription(new RTCSessionDescription(offerSDP));console.log("✅ Remote description (offer) set successfully");console.log("🔄 Creating answer...");const answer=await localConnection.createAnswer();console.log("✅ Answer created successfully");console.log("📦 Answer SDP:",JSON.stringify(answer).substring(0,100)+"...");await localConnection.setLocalDescription(answer);console.log("✅ Local answer description set successfully");console.log("⏳ Waiting for ICE gathering to complete...");await waitForIceGathering(localConnection);console.log("✅ ICE gathering completed");console.log(`📤 Submitting answer SDP for peerId: ${offerEntry.peerId}`);console.log("📦 Final answer SDP:",JSON.stringify(localConnection.localDescription).substring(0,100)+"...");await submitSDP(offerEntry.peerId,"answer",JSON.stringify(localConnection.localDescription));console.log("✅ Answer SDP submitted successfully!");console.log(`🗑️ Cleaning up offer data after submitting answer`);cleanupSignalingData(offerEntry.peerId,"offer")}catch(error){console.error("❌ Error setting up answerer:",error);$("#peerIdSubmit").prop("disabled",!1).text("Connect");$("#joinPeer").prop("disabled",!1).text("Join");showAlert("Failed to establish connection. Please try again.")}}
-function createPeerConnection(){const savedStuns=JSON.parse(localStorage.getItem("selectedStunServers")||"[]");const stunServers=savedStuns.length>=1?savedStuns:["stun:global.stun.twilio.com:3478"];const pc=new RTCPeerConnection({iceServers:stunServers.map((url)=>({urls:url})),iceCandidatePoolSize:0,});pc.oniceconnectionstatechange=()=>{console.log("ICE connection state:",pc.iceConnectionState);const $status=$("#status");if(["connected","completed"].includes(pc.iceConnectionState)){$status.text("Online")}else if(["disconnected","failed","closed"].includes(pc.iceConnectionState)){$status.text("Offline")}};return pc}
-function waitForIceGathering(pc){updateConnectionStatus("ICE Gathering...","80",!1);return new Promise((resolve)=>{if(pc.iceGatheringState==="complete")return resolve();const checkState=()=>{if(pc.iceGatheringState==="complete"){pc.removeEventListener("icegatheringstatechange",checkState);resolve()}};pc.addEventListener("icegatheringstatechange",checkState)})}
-async function submitSDP(peerId,role,sdp){updateConnectionStatus(`Submitting ${role}...`,"90",!1);try{console.log(`📤 Submitting ${role} SDP for peerId: ${peerId}`);console.log(`📦 SDP data: ${sdp.substring(0, 100)}...`);const response=await fetch(SIGNALING_URL,{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({type:role,peerId:peerId,data:sdp}),});if(!response.ok){throw new Error(`HTTP error! status: ${response.status}`)}
-const result=await response.json();console.log(`✅ Submitted ${role} SDP for peerId: ${peerId}`,result);updateConnectionStatus(`${role} Submitted`,"99",!1)}catch(error){console.error(`❌ Error submitting ${role} SDP:`,error);throw error}}
-async function fetchSDP(peerId,role){try{console.log(`📥 Fetching ${role} SDP for peerId: ${peerId}`);const url=`${SIGNALING_URL}?type=${encodeURIComponent(role)}&peerId=${encodeURIComponent(peerId)}`;const response=await fetch(url,{method:"GET",headers:{'Content-Type':'application/json'},});if(!response.ok){throw new Error(`HTTP error! status: ${response.status}`)}
-const result=await response.json();console.log(`📦 fetchSDP response:`,result);if(result.found){console.log(`✅ Found ${role} SDP for peerId: ${peerId}`);console.log(`📦 SDP data: ${result.data.substring(0, 100)}...`);const returnData={peerId:result.peerId,role:role,sdp:result.data,timestamp:result.timestamp,found:!0};console.log(`📤 Returning:`,returnData);return returnData}else{console.log(`❌ No ${role} SDP found for peerId: ${peerId}`);console.log(`📤 Returning null`);return null}}catch(e){console.error(`❌ Failed to fetch ${role} SDP for peerId: ${peerId}:`,e);return null}}
-function setupDataChannel(){if(!peerId){console.error("peerId is undefined in setupDataChannel");return}
-dataChannel.onopen=()=>{console.log("Data channel opened for peerId:",peerId);deletePeerFromSheet(peerId);pingIntervalId=setInterval(()=>{if(dataChannel.readyState==="open"){dataChannel.send(JSON.stringify({type:"ping",timestamp:Date.now()}))}},PING_INTERVAL);dataChannel.send(JSON.stringify({type:"username",name:truncateName($("#chat-username").val()||"Anonymous"),}));transitionToChat()};dataChannel.onmessage=(e)=>{if(e.data instanceof ArrayBuffer){const view=new Uint32Array(e.data,0,3);const[majorIndex,chunkIndex,totalChunks]=view;let messageId=null;for(const[id,transfer]of receivedTransfers.entries()){if(transfer.fileInfo.useSingleChannel){messageId=id;break}}
-if(!messageId){console.warn("No active single-channel transfer found for incoming chunk.");return}
-const transfer=receivedTransfers.get(messageId);if(!transfer){console.warn("Received chunk but no file info available yet.");return}
-const chunkData=e.data.slice(12);transfer.buffers.push(chunkData);transfer.receivedBytes+=chunkData.byteLength;transfer.expectedChunk++;updateProgressBar(messageId,(transfer.receivedBytes/transfer.fileInfo.fileSize)*100);if(transfer.receivedBytes>=transfer.fileInfo.fileSize){clearTimeout(transfer.timeoutId);try{const blob=new Blob(transfer.buffers,{type:transfer.fileInfo.fileType||"application/octet-stream",});const url=URL.createObjectURL(blob);displayMessage(transfer.fileInfo.name,transfer.fileInfo.fileName,!1,"file",url,messageId,"delivered",transfer.fileInfo.fileType,transfer.fileInfo.fileSize)}catch(err){console.error(`Error reconstructing file ${transfer.fileInfo.fileName}:`,err);showAlert("Failed to reconstruct received file.")}
-hideProgressBar(messageId);receivedTransfers.delete(messageId);retryCounts.delete(messageId)}else{clearTimeout(transfer.timeoutId);transfer.timeoutId=setTimeout(()=>{const retryCount=retryCounts.get(messageId)||0;if(retryCount<MAX_RETRIES){console.warn(`Resend request: ${messageId} [${majorIndex}-${transfer.expectedChunk}]`);retryCounts.set(messageId,retryCount+1);dataChannel.send(JSON.stringify({type:"resend_request",messageId,majorIndex,chunkIndex:transfer.expectedChunk,}))}else{showAlert(`Failed to receive all chunks for ${transfer.fileInfo.fileName}.`);hideProgressBar(messageId);receivedTransfers.delete(messageId);retryCounts.delete(messageId)}},CHUNK_TIMEOUT)}}else{const msg=JSON.parse(e.data);if(msg.type==="text"){displayMessage(msg.name,msg.message,!1,"text",null,msg.messageId,"delivered")}else if(msg.type==="location"){displayMessage(msg.name||"Peer",msg,!1,"location",null,msg.messageId,"delivered")}else if(msg.type==="file"){receivedTransfers.set(msg.messageId,{fileInfo:{name:msg.name,messageId:msg.messageId,fileName:msg.fileName,fileSize:msg.fileSize,fileType:msg.fileType,useSingleChannel:msg.useSingleChannel||!1,},buffers:[],receivedBytes:0,expectedChunk:0,lastChunkTime:Date.now(),timeoutId:null,});if(!msg.useSingleChannel){mediaReceivingChunks[msg.messageId]={fileInfo:{name:msg.name,fileName:msg.fileName,fileSize:msg.fileSize,fileType:msg.fileType,},parts:new Array(NUM_MEDIA_CHANNELS),bytesReceived:0,expectedSize:msg.fileSize,completed:!1,}}
-showProgressBar(msg.messageId,!1);console.log(`Received file metadata for ${msg.fileName}`)}else if(msg.type==="resend_request"){console.log(`🔁 Resend request for ${msg.messageId} [${msg.majorIndex}-${msg.chunkIndex}]`);resendFileChunk(msg.messageId,msg.majorIndex,msg.chunkIndex)}else if(msg.type==="username"){console.log("Received peer username:",msg.name);$("#headerBtnName").text(msg.name).addClass("text-capitalize")}else if(msg.type==="ping"){console.log(`📡 Ping received from peer at ${new Date(
-            msg.timestamp
-          ).toLocaleTimeString()}`);$("#status").text("Online");lastPingReceivedTime=Date.now()}}};dataChannel.onerror=(error)=>{console.error("Data channel error:",error);for(const[messageId,transfer]of receivedTransfers.entries()){hideProgressBar(messageId);showAlert(`Transfer error for ${transfer.fileInfo.fileName}. Please try again.`);clearTimeout(transfer.timeoutId);retryCounts.delete(messageId)}
-receivedTransfers.clear()}}
-function setupMediaDataChannel(channel,index){channel.onmessage=(e)=>{const data=new Uint8Array(e.data);const metadata=new Uint32Array(data.slice(0,12).buffer);const majorIndex=metadata[0];const chunkIndex=metadata[1];const totalChunks=metadata[2];const payload=data.slice(12);const activeTransferEntry=Object.entries(mediaReceivingChunks).find(([_,transfer])=>!transfer.completed&&transfer.parts.length===3);if(!activeTransferEntry){console.warn("Received chunk but no file info available yet or this is a single-channel transfer.");return}
-const[messageId,transfer]=activeTransferEntry;if(!transfer.parts[majorIndex]){transfer.parts[majorIndex]=new Array(totalChunks).fill(null)}
-if(!transfer.parts[majorIndex][chunkIndex]){transfer.parts[majorIndex][chunkIndex]=payload;transfer.bytesReceived+=payload.byteLength}
-if(!transfer.lastReceivedTime)transfer.lastReceivedTime={};transfer.lastReceivedTime[`${majorIndex}-${chunkIndex}`]=Date.now();if(!transfer.resendIntervalId){transfer.resendIntervalId=setInterval(()=>{const allChunksPresent=transfer.parts.every((part)=>part&&part.every((c)=>c));if(!allChunksPresent){for(let m=0;m<transfer.parts.length;m++){if(!Array.isArray(transfer.parts[m]))continue;for(let c=0;c<transfer.parts[m].length;c++){if(!transfer.parts[m][c]){console.warn(`⏳ Missing chunk detected: [${m}-${c}] for messageId ${messageId}`);dataChannel.send(JSON.stringify({type:"resend_request",messageId,majorIndex:m,chunkIndex:c,}));return}}}}},CHUNK_TIMEOUT)}
-updateProgressBar(messageId,(transfer.bytesReceived/transfer.expectedSize)*100);const isComplete=transfer.parts.length===3&&transfer.parts.every((part)=>Array.isArray(part)&&part.length===totalChunks&&part.every((chunk)=>chunk!==null&&chunk!==undefined));if(!isComplete){console.warn(`❗ File assembly attempted before all chunks arrived. Parts:`,transfer.parts);return}
-clearInterval(transfer.resendIntervalId);delete transfer.resendIntervalId;transfer.completed=!0;const blobParts=transfer.parts.flat();const finalBlob=new Blob(blobParts,{type:transfer.fileInfo.fileType});const url=URL.createObjectURL(finalBlob);displayMessage(transfer.fileInfo.name,transfer.fileInfo.fileName,!1,"file",url,messageId,"delivered",transfer.fileInfo.fileType,transfer.fileInfo.fileSize);hideProgressBar(messageId);delete mediaReceivingChunks[messageId]};channel.onerror=(err)=>{console.error("Media channel error (index "+index+"):",err);$("#status").text("Offline");showPeerOfflineModal()};channel.onopen=()=>{console.log("Media data channel "+index+" opened")}}
-function sendFileChunks(messageId,onComplete=()=>{}){const transfer=activeTransfers.get(messageId);if(!transfer)return;if(transfer.useSingleChannel){const channel=dataChannel;if(!channel){console.warn("No open media channel available.");showAlert("No media channel available to send the file.");return}
-const totalChunks=Math.ceil(transfer.file.size/CHUNK_SIZE);let sentChunks=0;let progressUpdated=0;let currentChunk=0;const sendChunk=()=>{if(currentChunk>=totalChunks){console.log("✅ File sending complete (single channel) for messageId:",messageId);hideProgressBar(messageId);$("#chat-file").val("");$("#btn-toggle-back").click();currentFile=null;activeTransfers.delete(messageId);retryCounts.delete(messageId);onComplete();return}
-if(channel.bufferedAmount>4*1024*1024){setTimeout(sendChunk,100);return}
-const start=currentChunk*CHUNK_SIZE;const end=Math.min(start+CHUNK_SIZE,transfer.file.size);const slice=transfer.file.slice(start,end);const reader=new FileReader();reader.onload=()=>{try{const meta=new Uint32Array([0,currentChunk,totalChunks]);const data=new Uint8Array(reader.result);const combined=new Uint8Array(meta.byteLength+data.byteLength);combined.set(new Uint8Array(meta.buffer),0);combined.set(data,meta.byteLength);channel.send(combined.buffer);sentChunks++;const percentage=(sentChunks/totalChunks)*100;if(percentage-progressUpdated>=1){progressUpdated=percentage;updateProgressBar(messageId,percentage)}
-currentChunk++;setTimeout(sendChunk,0)}catch(err){console.error("❌ Error sending chunk:",err);hideProgressBar(messageId);showAlert("Failed to send chunk.");onComplete()}};reader.onerror=()=>{console.error("❌ FileReader error during send");hideProgressBar(messageId);showAlert("Failed to read file chunk.");onComplete()};reader.readAsArrayBuffer(slice)};sendChunk();return}
-const file=transfer.file;const fileSize=file.size;const chunkSize=CHUNK_SIZE;const numChannels=mediaChannels.length;const partSize=Math.ceil(fileSize/numChannels);const chunkParts=[];for(let i=0;i<numChannels;i++){const start=i*partSize;const end=Math.min(start+partSize,fileSize);chunkParts[i]=[];for(let offset=start;offset<end;offset+=chunkSize){const slice=file.slice(offset,Math.min(offset+chunkSize,end));chunkParts[i].push(slice)}}
-transfer.chunkParts=chunkParts;const totalSubChunks=chunkParts.flat().length;let totalSentChunks=0;let progressUpdated=0;chunkParts.forEach((partChunks,majorIndex)=>{let subIndex=0;const sendNext=()=>{if(subIndex>=partChunks.length)return;const channel=mediaChannels[majorIndex];if(!channel||channel.readyState!=="open"){console.warn(`Channel ${majorIndex} not ready`);setTimeout(sendNext,100);return}
-if(channel.bufferedAmount>4*1024*1024){setTimeout(sendNext,100);return}
-const reader=new FileReader();reader.onload=()=>{try{const meta=new Uint32Array([majorIndex,subIndex,partChunks.length,]);const data=new Uint8Array(reader.result);const combined=new Uint8Array(meta.byteLength+data.byteLength);combined.set(new Uint8Array(meta.buffer),0);combined.set(data,meta.byteLength);channel.send(combined.buffer);totalSentChunks++;const percentage=(totalSentChunks/totalSubChunks)*100;if(percentage-progressUpdated>=1){progressUpdated=percentage;updateProgressBar(messageId,percentage)}
-subIndex++;setTimeout(sendNext,0)}catch(err){console.error("❌ Send error:",err);hideProgressBar(messageId);showAlert("Failed to send chunk");onComplete()}};reader.onerror=()=>{console.error("❌ FileReader error");hideProgressBar(messageId);showAlert("Failed to read chunk");onComplete()};reader.readAsArrayBuffer(partChunks[subIndex])};sendNext()});const checkComplete=setInterval(()=>{if(totalSentChunks>=totalSubChunks){clearInterval(checkComplete);console.log("✅ File sending complete for messageId:",messageId);hideProgressBar(messageId);$("#chat-file").val("");$("#btn-toggle-back").click();currentFile=null;activeTransfers.delete(messageId);retryCounts.delete(messageId);onComplete()}},300)}
-function resendFileChunk(messageId,majorIndex,chunkIndex){const transfer=activeTransfers.get(messageId);if(!transfer||!transfer.chunkParts){console.warn(`Cannot resend chunk: missing transfer info or chunkParts`);return}
-const partChunks=transfer.chunkParts[majorIndex];if(!partChunks||!partChunks[chunkIndex]){console.warn(`Chunk not found for resend: major ${majorIndex}, index ${chunkIndex}`);return}
-const channel=mediaChannels[majorIndex];if(!channel||channel.readyState!=="open"){console.warn(`Channel ${majorIndex} not ready for resend`);setTimeout(()=>resendFileChunk(messageId,majorIndex,chunkIndex),200);return}
-const reader=new FileReader();reader.onload=()=>{try{const meta=new Uint32Array([majorIndex,chunkIndex,partChunks.length]);const data=new Uint8Array(reader.result);const combined=new Uint8Array(meta.byteLength+data.byteLength);combined.set(new Uint8Array(meta.buffer),0);combined.set(data,meta.byteLength);channel.send(combined.buffer);console.log(`✅ Resent chunk [${majorIndex}-${chunkIndex}] for messageId: ${messageId}`)}catch(error){console.error(`❌ Resend failed:`,error)}};reader.onerror=()=>{console.error(`❌ FileReader error during resend for [${majorIndex}-${chunkIndex}]`)};reader.readAsArrayBuffer(partChunks[chunkIndex])}
-function showProgressBar(messageId,isSender){const alignClass=isSender?"self":"other";let fileName="Unknown File";if(isSender){fileName=activeTransfers.get(messageId)?.fileName||"Unknown File"}else if(mediaReceivingChunks[messageId]?.fileInfo?.fileName){fileName=mediaReceivingChunks[messageId].fileInfo.fileName}else if(receivedTransfers.get(messageId)?.fileInfo?.fileName){fileName=receivedTransfers.get(messageId).fileInfo.fileName}
-$("#chat-display").append(`
+const SIGNALING_URL = '/signaling';
+
+let localConnection, dataChannel;
+let pollingInterval;
+let isManuallyConnecting = !1;
+let peerId = null;
+let mediaSendQueue = [];
+let isSendingFile = !1;
+let pingIntervalId = null;
+let mediaChannels = [];
+let mediaReceivingChunks = {};
+let lastPingReceivedTime = Date.now();
+
+const CONNECTION_TIMEOUT = 120000;
+const CHUNK_TIMEOUT = 5000;
+const MAX_RETRIES = 5;
+const NUM_MEDIA_CHANNELS = 3;
+const PING_INTERVAL = 10000;
+const CHUNK_SIZE = 65536;
+const BUFFER_THRESHOLD = 262144;
+
+let fileReader = new FileReader();
+let currentFile = null;
+let retryCounts = new Map();
+let activeTransfers = new Map();
+const receivedTransfers = new Map();
+
+$(document).ready(() => {
+  let savedProfilePeerId = localStorage.getItem("peerIds") || "";
+  let savedProfilePeerName = localStorage.getItem("peerName") || "";
+  if (savedProfilePeerName) {
+    $("#chat-username").val(savedProfilePeerName);
+    $("#peer-id").val(savedProfilePeerId);
+  }
+
+  $("#peerIdSubmit").click(async function (e) {
+    e.preventDefault();
+    isManuallyConnecting = !0;
+    var username = $("#chat-username").val().trim();
+    peerId = $("#peer-id").val().trim();
+    $("#chat-username").prop("disabled", !0);
+    $("#peer-id").prop("disabled", !0);
+    $("#name-error").text("");
+    $("#peer-error").text("");
+    let hasError = !1;
+
+    if (!username) {
+      username = "Anonymous";
+    }
+
+    if (!peerId) {
+      peerId = "peer123";
+    }
+
+    if (hasError) {
+      return;
+    }
+
+    $("#peerIdSubmit").prop("disabled", !0).text("Connecting...");
+    $("#joinPeer").prop("disabled", !0).text("Join");
+    $("#peerId").val(peerId);
+    $("#peerBtnGroup").removeClass("d-flex").addClass("d-none");
+    $("#connectionStatusPanel").removeClass("d-none");
+    updateConnectionStatus("Connecting...", "5", !1);
+    startConnection(peerId, "connect");
+  });
+
+  $("#media-input-group").change((event) => {
+    const file = event.target.files[0];
+    if (file) {
+      currentFile = file;
+    } else {
+      currentFile = null;
+    }
+  });
+
+  $("#btn-send-media").click(() => {
+    if (!currentFile) {
+      showAlert("No file is selected!");
+      $("#media-input").click();
+      return;
+    }
+
+    const queueId = `queue-${Date.now()}`;
+    const fileToSend = {
+      file: currentFile,
+      queueId: queueId,
+    };
+
+    if (isSendingFile || mediaSendQueue.length > 0) {
+      showQueuedProgress(queueId, currentFile.name);
+    }
+
+    currentFile = null;
+    $("#chat-file").val("");
+    mediaSendQueue.push(fileToSend);
+
+    if (!isSendingFile) {
+      processNextFileInQueue();
+    }
+  });
+
+  $("#reloadBtn").click(function () {
+    location.reload();
+  });
+
+  $("#btn-send-text").click(() => {
+    const name = $("#chat-username").val() || "Anonymous";
+    const message = $("#chat-message").val();
+    const messageId = Date.now().toString();
+
+    if (message && dataChannel && dataChannel.readyState === "open") {
+      console.log("Sending text message, dataChannel state:", dataChannel.readyState);
+      try {
+        dataChannel.send(JSON.stringify({ type: "text", name, message, messageId }));
+        displayMessage(name, message, !0, "text", null, messageId, "sent");
+        $("#chat-message").val("").focus();
+      } catch (error) {
+        console.error("Error sending text message:", error);
+        showAlert("Failed to send message. Please try again.");
+      }
+    } else {
+      console.warn("Cannot send text, dataChannel state:", dataChannel ? dataChannel.readyState : "undefined");
+      showAlert("Please wait until the connection is established before sending a message.");
+    }
+  });
+
+  $("#delete-all-btn").click(() => {
+    console.log('🗑️ Global cleanup requested');
+    fetch(SIGNALING_URL, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ type: "cleanup", peerId: "" }),
+    }).then((res) => res.json())
+      .then((result) => {
+        console.log('✅ Global cleanup completed:', result);
+        showAlert(`Deleted all SDP entries: ${result.message}`, !1);
+        setTimeout(() => {
+          location.reload();
+        }, 3000);
+      }).catch((err) => {
+        console.error('❌ Global cleanup error:', err);
+        showAlert(`Error deleting SDP entries: ${err}`);
+      });
+  });
+
+  $("#joinPeer").click(async function (e) {
+    e.preventDefault();
+    isManuallyConnecting = !0;
+    const username = $("#chat-username").val().trim();
+    peerId = $("#peer-id").val().trim();
+    $("#chat-username").prop("disabled", !0);
+    $("#peer-id").prop("disabled", !0);
+    $("#name-error").text("");
+    $("#peer-error").text("");
+    let hasError = !1;
+
+    if (!username) {
+      $("#name-error").text("Name is required");
+      $("#chat-username").prop("disabled", !1);
+      $("#peer-id").prop("disabled", !1);
+      hasError = !0;
+    }
+
+    if (!peerId) {
+      $("#peer-error").text("Peer ID is required");
+      $("#chat-username").prop("disabled", !1);
+      $("#peer-id").prop("disabled", !1);
+      hasError = !0;
+    }
+
+    if (hasError) {
+      return;
+    }
+
+    $("#joinPeer").prop("disabled", !0).text("Joining...");
+    $("#peerIdSubmit").prop("disabled", !0).text("Connect");
+    $("#peerId").val(peerId);
+    $("#peerBtnGroup").removeClass("d-flex").addClass("d-none");
+    $("#connectionStatusPanel").removeClass("d-none");
+    updateConnectionStatus("Joining...", "5", !1);
+    startConnection(peerId, "join");
+  });
+
+  $("#confirmSavePeerBtn").click(async () => {
+    const peerIdInput = $("#peerIdToSave").val().trim();
+    const peerNameInput = $("#peerNameToSave").val().trim();
+    const alertBox = $("#save-peer-alert");
+    alertBox.addClass("d-none").text("");
+
+    if (!peerIdInput || !peerNameInput) {
+      alertBox.text("Peer ID or Name cannot be empty").removeClass("d-none");
+      return;
+    }
+
+    localStorage.setItem("peerIds", peerIdInput);
+    localStorage.setItem("peerName", peerNameInput);
+    showAlert(`Peer ID "${peerIdInput}" saved for notifications.`, !1);
+    const permission = await Notification.requestPermission();
+
+    if (permission !== "granted") {
+      alertBox.text("Notification permission denied. Cannot able to notify the joining request").removeClass("d-none");
+      return;
+    }
+
+    $("#savePeerModal").modal("hide");
+  });
+
+  $("#settingBtn").click(function () {
+    const savedPeers = localStorage.getItem("peerIds") || "";
+    const savedPeersName = localStorage.getItem("peerName") || "";
+
+    if (savedPeers) {
+      $("#peerIdToSave").val(savedPeers);
+      $("#peerNameToSave").val(savedPeersName);
+    }
+
+    loadStunSettings();
+    loadApiKey();
+  });
+
+  $(document).on("change", ".stun-option", () => {
+    const selected = $(".stun-option:checked").map(function () {
+      return this.value;
+    }).get();
+
+    if (selected.length < 1) {
+      $("#stun-error").removeClass("d-none");
+    } else {
+      $("#stun-error").addClass("d-none");
+      localStorage.setItem("selectedStunServers", JSON.stringify(selected));
+      $("#stunSaveStatus").text(" ( Saved Successfully! )");
+      setTimeout(() => {
+        $("#stunSaveStatus").text("");
+      }, 3000);
+    }
+  });
+
+  let hasPrompted = !1;
+
+  window.autoCheckInterval = setInterval(async () => {
+    if (isManuallyConnecting || hasPrompted) return;
+
+    const savedPeers = localStorage.getItem("peerIds") || "peer123";
+    const savedPeerName = localStorage.getItem("peerName") || "Anonymous";
+
+    if (!savedPeers) return;
+
+    const offer = await fetchSDP(savedPeers, "offer");
+
+    if (offer) {
+      if (Notification.permission === "granted" && document.visibilityState !== "visible") {
+        const notification = new Notification("Wavelite", {
+          body: `Peer "${savedPeers}" is requesting to connect.`,
+          icon: "/logo.png",
+        });
+
+        notification.onclick = function (event) {
+          event.preventDefault();
+          window.focus();
+          $("#autoJoinMessage").text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);
+          const autoJoinModal = new bootstrap.Modal(document.getElementById("autoJoinModal"));
+          autoJoinModal.show();
+
+          $("#autoJoinConfirmBtn").off("click").on("click", () => {
+            autoJoinModal.hide();
+            setTimeout(() => {
+              isManuallyConnecting = !0;
+              $("#peer-id").val(savedPeers);
+              $("#chat-username").val(savedPeerName);
+              $("#joinPeer").click();
+            }, 300);
+          });
+        };
+      } else if (Notification.permission !== "denied") {
+        Notification.requestPermission().then((permission) => {
+          if (permission === "granted" && document.visibilityState !== "visible") {
+            new Notification("Wavelite", {
+              body: `Peer "${savedPeers}" is requesting to connect.`,
+              icon: "/logo.png",
+            });
+          }
+        });
+      }
+
+      hasPrompted = !0;
+
+      if (document.visibilityState === "visible") {
+        $("#autoJoinMessage").text(`Peer "${savedPeers}" is requesting to connect. Do you want to join?`);
+        const autoJoinModal = new bootstrap.Modal(document.getElementById("autoJoinModal"));
+        autoJoinModal.show();
+
+        $("#autoJoinConfirmBtn").off("click").on("click", () => {
+          autoJoinModal.hide();
+          setTimeout(() => {
+            isManuallyConnecting = !0;
+            $("#peer-id").val(savedPeers);
+            $("#chat-username").val(savedPeerName);
+            $("#joinPeer").click();
+          }, 300);
+        });
+      }
+
+      return;
+    }
+  }, 3000);
+});
+
+async function startConnection(peerId, mode = "connect") {
+  console.log(`🚀 Starting connection for peerId: ${peerId} (mode: ${mode})`);
+  console.log(`🔍 Checking for existing offers...`);
+  const offerEntry = await fetchSDP(peerId, "offer");
+  console.log(`🔍 fetchSDP result:`, offerEntry);
+
+  if (offerEntry && offerEntry.found) {
+    console.log(`✅ Offer found for peerId: ${peerId}, acting as answerer`);
+    console.log(`📦 Offer data:`, offerEntry);
+    await setupAnswerer(offerEntry);
+  } else {
+    console.log(`❌ No offer found for peerId: ${peerId}, offerEntry:`, offerEntry);
+
+    if (mode === "join") {
+      console.log(`❌ No offer found for peerId: ${peerId}, starting to poll for offers (Join mode)`);
+      startJoinConnection(peerId);
+    } else {
+      console.log(`❌ No offer found for peerId: ${peerId}, acting as offerer (Connect mode)`);
+      await setupOfferer(peerId);
+    }
+  }
+}
+
+async function setupOfferer(peerId) {
+  console.log(`🔄 Setting up offerer for peerId: ${peerId}`);
+  localConnection = createPeerConnection();
+  dataChannel = localConnection.createDataChannel("chat");
+  mediaChannels = [];
+
+  for (let i = 0; i < NUM_MEDIA_CHANNELS; i++) {
+    const channel = localConnection.createDataChannel(`media-${i}`);
+    setupMediaDataChannel(channel, i);
+    mediaChannels.push(channel);
+  }
+
+  setupDataChannel();
+  updateConnectionStatus("Offer Creating...", "10", !1);
+
+  try {
+    console.log("🔄 Creating offer...");
+    const offer = await localConnection.createOffer();
+    console.log("✅ Offer created successfully");
+    console.log("📦 Offer SDP:", JSON.stringify(offer).substring(0, 100) + "...");
+    await localConnection.setLocalDescription(offer);
+    console.log("✅ Local offer description set successfully");
+    console.log("⏳ Waiting for ICE gathering to complete...");
+    await waitForIceGathering(localConnection);
+    console.log("✅ ICE gathering completed");
+    console.log(`📤 Submitting offer SDP for peerId: ${peerId}`);
+    console.log("📦 Final offer SDP:", JSON.stringify(localConnection.localDescription).substring(0, 100) + "...");
+    await submitSDP(peerId, "offer", JSON.stringify(localConnection.localDescription));
+    console.log("✅ Offer SDP submitted successfully!");
+    updateConnectionStatus("Waiting for peer...", "100", !0);
+
+    let startTime = Date.now();
+    let pollCount = 0;
+    console.log(`⏰ Started polling for answers (timeout: ${CONNECTION_TIMEOUT / 1000}s, interval: 3s)`);
+
+    pollingInterval = setInterval(async () => {
+      pollCount++;
+      const elapsed = Date.now() - startTime;
+      console.log(`🔍 Poll #${pollCount} for answer (elapsed: ${Math.round(elapsed / 1000)}s)`);
+
+      if (elapsed > CONNECTION_TIMEOUT) {
+        console.log(`⏰ Connection timeout reached (${CONNECTION_TIMEOUT / 1000}s), stopping polling`);
+        clearInterval(pollingInterval);
+        $("#peerIdSubmit").prop("disabled", !1).text("Connect");
+        $("#joinPeer").prop("disabled", !1).text("Join");
+        showAlert("Connection timed out. Please try again or check peer ID.");
+        $("#delete-all-btn").click();
+        return;
+      }
+
+      const answerEntry = await fetchSDP(peerId, "answer");
+      const percent = Math.min((elapsed / CONNECTION_TIMEOUT) * 100, 99);
+      updateConnectionStatus("Waiting for peer...", percent, !0);
+
+      if (answerEntry) {
+        console.log(`✅ Answer SDP found for peerId: ${peerId} on poll #${pollCount}`);
+        console.log(`🛑 Stopping polling for answers`);
+        clearInterval(pollingInterval);
+
+        try {
+          console.log(`📦 Processing answer SDP...`);
+          const sdp = JSON.parse(answerEntry.sdp);
+          await localConnection.setRemoteDescription(new RTCSessionDescription(sdp));
+          updateConnectionStatus("Connected Successfully!", "100", !0);
+          console.log("✅ Remote description (answer) set successfully");
+          console.log(`🎉 Connection established successfully!`);
+          console.log(`🗑️ Cleaning up signaling data after successful connection`);
+          deletePeerFromSheet(peerId);
+        } catch (error) {
+          console.error("❌ Failed to set remote description (answer):", error);
+        }
+      } else {
+        console.log(`❌ No answer SDP found yet for peerId: ${peerId} (poll #${pollCount})`);
+      }
+    }, 4000);
+  } catch (error) {
+    console.error("Error setting up offerer:", error);
+    $("#peerIdSubmit").prop("disabled", !1).text("Connect");
+    $("#joinPeer").prop("disabled", !1).text("Join");
+    showAlert("Failed to establish connection. Please try again.");
+  }
+}
+
+async function setupAnswerer(offerEntry) {
+  localConnection = createPeerConnection();
+  localConnection.ondatachannel = (event) => {
+    const channel = event.channel;
+
+    if (channel.label === "chat") {
+      dataChannel = channel;
+      setupDataChannel();
+    } else if (channel.label.startsWith("media-")) {
+      const index = parseInt(channel.label.split("-")[1]);
+      if (!isNaN(index)) {
+        mediaChannels[index] = channel;
+        setupMediaDataChannel(channel, index);
+      }
+    }
+  };
+
+  try {
+    console.log("Parsing and setting remote offer...");
+    const offerSDP = JSON.parse(offerEntry.sdp);
+    await localConnection.setRemoteDescription(new RTCSessionDescription(offerSDP));
+    console.log("✅ Remote description (offer) set successfully");
+    console.log("🔄 Creating answer...");
+    const answer = await localConnection.createAnswer();
+    console.log("✅ Answer created successfully");
+    console.log("📦 Answer SDP:", JSON.stringify(answer).substring(0, 100) + "...");
+    await localConnection.setLocalDescription(answer);
+    console.log("✅ Local answer description set successfully");
+    console.log("⏳ Waiting for ICE gathering to complete...");
+    await waitForIceGathering(localConnection);
+    console.log("✅ ICE gathering completed");
+    console.log(`📤 Submitting answer SDP for peerId: ${offerEntry.peerId}`);
+    console.log("📦 Final answer SDP:", JSON.stringify(localConnection.localDescription).substring(0, 100) + "...");
+    await submitSDP(offerEntry.peerId, "answer", JSON.stringify(localConnection.localDescription));
+    console.log("✅ Answer SDP submitted successfully!");
+    console.log(`🗑️ Cleaning up offer data after submitting answer`);
+    cleanupSignalingData(offerEntry.peerId, "offer");
+  } catch (error) {
+    console.error("❌ Error setting up answerer:", error);
+    $("#peerIdSubmit").prop("disabled", !1).text("Connect");
+    $("#joinPeer").prop("disabled", !1).text("Join");
+    showAlert("Failed to establish connection. Please try again.");
+  }
+}
+
+function createPeerConnection() {
+  const savedStuns = JSON.parse(localStorage.getItem("selectedStunServers") || "[]");
+  const stunServers = savedStuns.length >= 1 ? savedStuns : ["stun:global.stun.twilio.com:3478"];
+  const pc = new RTCPeerConnection({
+    iceServers: stunServers.map((url) => ({ urls: url })),
+    iceCandidatePoolSize: 0,
+  });
+
+  pc.oniceconnectionstatechange = () => {
+    console.log("ICE connection state:", pc.iceConnectionState);
+    const $status = $("#status");
+
+    if (["connected", "completed"].includes(pc.iceConnectionState)) {
+      $status.text("Online");
+    } else if (["disconnected", "failed", "closed"].includes(pc.iceConnectionState)) {
+      $status.text("Offline");
+    }
+  };
+
+  return pc;
+}
+
+function waitForIceGathering(pc) {
+  updateConnectionStatus("ICE Gathering...", "80", !1);
+  return new Promise((resolve) => {
+    if (pc.iceGatheringState === "complete") return resolve();
+
+    const checkState = () => {
+      if (pc.iceGatheringState === "complete") {
+        pc.removeEventListener("icegatheringstatechange", checkState);
+        resolve();
+      }
+    };
+
+    pc.addEventListener("icegatheringstatechange", checkState);
+  });
+}
+
+async function submitSDP(peerId, role, sdp) {
+  updateConnectionStatus(`Submitting ${role}...`, "90", !1);
+
+  try {
+    console.log(`📤 Submitting ${role} SDP for peerId: ${peerId}`);
+    console.log(`📦 SDP data: ${sdp.substring(0, 100)}...`);
+    const response = await fetch(SIGNALING_URL, {
+      method: "POST",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ type: role, peerId: peerId, data: sdp }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`✅ Submitted ${role} SDP for peerId: ${peerId}`, result);
+    updateConnectionStatus(`${role} Submitted`, "99", !1);
+  } catch (error) {
+    console.error(`❌ Error submitting ${role} SDP:`, error);
+    throw error;
+  }
+}
+
+async function fetchSDP(peerId, role) {
+  try {
+    console.log(`📥 Fetching ${role} SDP for peerId: ${peerId}`);
+    const url = `${SIGNALING_URL}?type=${encodeURIComponent(role)}&peerId=${encodeURIComponent(peerId)}`;
+    const response = await fetch(url, {
+      method: "GET",
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    console.log(`📦 fetchSDP response:`, result);
+
+    if (result.found) {
+      console.log(`✅ Found ${role} SDP for peerId: ${peerId}`);
+      console.log(`📦 SDP data: ${result.data.substring(0, 100)}...`);
+      const returnData = {
+        peerId: result.peerId,
+        role: role,
+        sdp: result.data,
+        timestamp: result.timestamp,
+        found: !0,
+      };
+      console.log(`📤 Returning:`, returnData);
+      return returnData;
+    } else {
+      console.log(`❌ No ${role} SDP found for peerId: ${peerId}`);
+      console.log(`📤 Returning null`);
+      return null;
+    }
+  } catch (e) {
+    console.error(`❌ Failed to fetch ${role} SDP for peerId: ${peerId}:`, e);
+    return null;
+  }
+}
+
+function setupDataChannel() {
+  if (!peerId) {
+    console.error("peerId is undefined in setupDataChannel");
+    return;
+  }
+
+  dataChannel.onopen = () => {
+    console.log("Data channel opened for peerId:", peerId);
+    deletePeerFromSheet(peerId);
+
+    pingIntervalId = setInterval(() => {
+      if (dataChannel.readyState === "open") {
+        dataChannel.send(JSON.stringify({ type: "ping", timestamp: Date.now() }));
+      }
+    }, PING_INTERVAL);
+
+    dataChannel.send(JSON.stringify({
+      type: "username",
+      name: truncateName($("#chat-username").val() || "Anonymous"),
+    }));
+    transitionToChat();
+  };
+
+  dataChannel.onmessage = (e) => {
+    if (e.data instanceof ArrayBuffer) {
+      const view = new Uint32Array(e.data, 0, 3);
+      const [majorIndex, chunkIndex, totalChunks] = view;
+      let messageId = null;
+
+      for (const [id, transfer] of receivedTransfers.entries()) {
+        if (transfer.fileInfo.useSingleChannel) {
+          messageId = id;
+          break;
+        }
+      }
+
+      if (!messageId) {
+        console.warn("No active single-channel transfer found for incoming chunk.");
+        return;
+      }
+
+      const transfer = receivedTransfers.get(messageId);
+
+      if (!transfer) {
+        console.warn("Received chunk but no file info available yet.");
+        return;
+      }
+
+      const chunkData = e.data.slice(12);
+      transfer.buffers.push(chunkData);
+      transfer.receivedBytes += chunkData.byteLength;
+      transfer.expectedChunk++;
+      updateProgressBar(messageId, (transfer.receivedBytes / transfer.fileInfo.fileSize) * 100);
+
+      if (transfer.receivedBytes >= transfer.fileInfo.fileSize) {
+        clearTimeout(transfer.timeoutId);
+
+        try {
+          const blob = new Blob(transfer.buffers, {
+            type: transfer.fileInfo.fileType || "application/octet-stream",
+          });
+          const url = URL.createObjectURL(blob);
+          displayMessage(
+            transfer.fileInfo.name,
+            transfer.fileInfo.fileName,
+            !1,
+            "file",
+            url,
+            messageId,
+            "delivered",
+            transfer.fileInfo.fileType,
+            transfer.fileInfo.fileSize
+          );
+        } catch (err) {
+          console.error(`Error reconstructing file ${transfer.fileInfo.fileName}:`, err);
+          showAlert("Failed to reconstruct received file.");
+        }
+
+        hideProgressBar(messageId);
+        receivedTransfers.delete(messageId);
+        retryCounts.delete(messageId);
+      } else {
+        clearTimeout(transfer.timeoutId);
+        transfer.timeoutId = setTimeout(() => {
+          const retryCount = retryCounts.get(messageId) || 0;
+
+          if (retryCount < MAX_RETRIES) {
+            console.warn(`Resend request: ${messageId} [${majorIndex}-${transfer.expectedChunk}]`);
+            retryCounts.set(messageId, retryCount + 1);
+            dataChannel.send(JSON.stringify({
+              type: "resend_request",
+              messageId,
+              majorIndex,
+              chunkIndex: transfer.expectedChunk,
+            }));
+          } else {
+            showAlert(`Failed to receive all chunks for ${transfer.fileInfo.fileName}.`);
+            hideProgressBar(messageId);
+            receivedTransfers.delete(messageId);
+            retryCounts.delete(messageId);
+          }
+        }, CHUNK_TIMEOUT);
+      }
+    } else {
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === "text") {
+        displayMessage(msg.name, msg.message, !1, "text", null, msg.messageId, "delivered");
+      } else if (msg.type === "location") {
+        displayMessage(msg.name || "Peer", msg, !1, "location", null, msg.messageId, "delivered");
+      } else if (msg.type === "file") {
+        receivedTransfers.set(msg.messageId, {
+          fileInfo: {
+            name: msg.name,
+            messageId: msg.messageId,
+            fileName: msg.fileName,
+            fileSize: msg.fileSize,
+            fileType: msg.fileType,
+            useSingleChannel: msg.useSingleChannel || !1,
+          },
+          buffers: [],
+          receivedBytes: 0,
+          expectedChunk: 0,
+          lastChunkTime: Date.now(),
+          timeoutId: null,
+        });
+
+        if (!msg.useSingleChannel) {
+          mediaReceivingChunks[msg.messageId] = {
+            fileInfo: {
+              name: msg.name,
+              fileName: msg.fileName,
+              fileSize: msg.fileSize,
+              fileType: msg.fileType,
+            },
+            parts: new Array(NUM_MEDIA_CHANNELS),
+            bytesReceived: 0,
+            expectedSize: msg.fileSize,
+            completed: !1,
+          };
+        }
+
+        showProgressBar(msg.messageId, !1);
+        console.log(`Received file metadata for ${msg.fileName}`);
+      } else if (msg.type === "resend_request") {
+        console.log(`🔁 Resend request for ${msg.messageId} [${msg.majorIndex}-${msg.chunkIndex}]`);
+        resendFileChunk(msg.messageId, msg.majorIndex, msg.chunkIndex);
+      } else if (msg.type === "username") {
+        console.log("Received peer username:", msg.name);
+        $("#headerBtnName").text(msg.name).addClass("text-capitalize");
+      } else if (msg.type === "ping") {
+        console.log(`📡 Ping received from peer at ${new Date(
+          msg.timestamp
+        ).toLocaleTimeString()}`);
+        $("#status").text("Online");
+        lastPingReceivedTime = Date.now();
+      }
+    }
+  };
+
+  dataChannel.onerror = (error) => {
+    console.error("Data channel error:", error);
+
+    for (const [messageId, transfer] of receivedTransfers.entries()) {
+      hideProgressBar(messageId);
+      showAlert(`Transfer error for ${transfer.fileInfo.fileName}. Please try again.`);
+      clearTimeout(transfer.timeoutId);
+      retryCounts.delete(messageId);
+    }
+
+    receivedTransfers.clear();
+  };
+}
+
+function setupMediaDataChannel(channel, index) {
+  channel.onmessage = (e) => {
+    const data = new Uint8Array(e.data);
+    const metadata = new Uint32Array(data.slice(0, 12).buffer);
+    const majorIndex = metadata[0];
+    const chunkIndex = metadata[1];
+    const totalChunks = metadata[2];
+    const payload = data.slice(12);
+
+    const activeTransferEntry = Object.entries(mediaReceivingChunks).find(
+      ([_, transfer]) => !transfer.completed && transfer.parts.length === 3
+    );
+
+    if (!activeTransferEntry) {
+      console.warn("Received chunk but no file info available yet or this is a single-channel transfer.");
+      return;
+    }
+
+    const [messageId, transfer] = activeTransferEntry;
+
+    if (!transfer.parts[majorIndex]) {
+      transfer.parts[majorIndex] = new Array(totalChunks).fill(null);
+    }
+
+    if (!transfer.parts[majorIndex][chunkIndex]) {
+      transfer.parts[majorIndex][chunkIndex] = payload;
+      transfer.bytesReceived += payload.byteLength;
+    }
+
+    if (!transfer.lastReceivedTime) transfer.lastReceivedTime = {};
+    transfer.lastReceivedTime[`${majorIndex}-${chunkIndex}`] = Date.now();
+
+    if (!transfer.resendIntervalId) {
+      transfer.resendIntervalId = setInterval(() => {
+        const allChunksPresent = transfer.parts.every(
+          (part) => part && part.every((c) => c)
+        );
+
+        if (!allChunksPresent) {
+          for (let m = 0; m < transfer.parts.length; m++) {
+            if (!Array.isArray(transfer.parts[m])) continue;
+
+            for (let c = 0; c < transfer.parts[m].length; c++) {
+              if (!transfer.parts[m][c]) {
+                console.warn(`⏳ Missing chunk detected: [${m}-${c}] for messageId ${messageId}`);
+                dataChannel.send(JSON.stringify({
+                  type: "resend_request",
+                  messageId,
+                  majorIndex: m,
+                  chunkIndex: c,
+                }));
+                return;
+              }
+            }
+          }
+        }
+      }, CHUNK_TIMEOUT);
+    }
+
+    updateProgressBar(messageId, (transfer.bytesReceived / transfer.expectedSize) * 100);
+
+    const isComplete =
+      transfer.parts.length === 3 &&
+      transfer.parts.every(
+        (part) =>
+          Array.isArray(part) &&
+          part.length === totalChunks &&
+          part.every((chunk) => chunk !== null && chunk !== undefined)
+      );
+
+    if (!isComplete) {
+      console.warn(`❗ File assembly attempted before all chunks arrived. Parts:`, transfer.parts);
+      return;
+    }
+
+    clearInterval(transfer.resendIntervalId);
+    delete transfer.resendIntervalId;
+    transfer.completed = !0;
+
+    const blobParts = transfer.parts.flat();
+    const finalBlob = new Blob(blobParts, { type: transfer.fileInfo.fileType });
+    const url = URL.createObjectURL(finalBlob);
+
+    displayMessage(
+      transfer.fileInfo.name,
+      transfer.fileInfo.fileName,
+      !1,
+      "file",
+      url,
+      messageId,
+      "delivered",
+      transfer.fileInfo.fileType,
+      transfer.fileInfo.fileSize
+    );
+    hideProgressBar(messageId);
+    delete mediaReceivingChunks[messageId];
+  };
+
+  channel.onerror = (err) => {
+    console.error("Media channel error (index " + index + "):", err);
+    $("#status").text("Offline");
+    showPeerOfflineModal();
+  };
+
+  channel.onopen = () => {
+    console.log("Media data channel " + index + " opened");
+  };
+}
+
+function sendFileChunks(messageId, onComplete = () => {}) {
+  const transfer = activeTransfers.get(messageId);
+  if (!transfer) return;
+
+  if (transfer.useSingleChannel) {
+    const channel = dataChannel;
+
+    if (!channel) {
+      console.warn("No open media channel available.");
+      showAlert("No media channel available to send the file.");
+      return;
+    }
+
+    const totalChunks = Math.ceil(transfer.file.size / CHUNK_SIZE);
+    let sentChunks = 0;
+    let progressUpdated = 0;
+    let currentChunk = 0;
+
+    const sendChunk = () => {
+      if (currentChunk >= totalChunks) {
+        console.log("✅ File sending complete (single channel) for messageId:", messageId);
+        hideProgressBar(messageId);
+        $("#chat-file").val("");
+        $("#btn-toggle-back").click();
+        currentFile = null;
+        activeTransfers.delete(messageId);
+        retryCounts.delete(messageId);
+        onComplete();
+        return;
+      }
+
+      if (channel.bufferedAmount > 4 * 1024 * 1024) {
+        setTimeout(sendChunk, 100);
+        return;
+      }
+
+      const start = currentChunk * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, transfer.file.size);
+      const slice = transfer.file.slice(start, end);
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        try {
+          const meta = new Uint32Array([0, currentChunk, totalChunks]);
+          const data = new Uint8Array(reader.result);
+          const combined = new Uint8Array(meta.byteLength + data.byteLength);
+          combined.set(new Uint8Array(meta.buffer), 0);
+          combined.set(data, meta.byteLength);
+          channel.send(combined.buffer);
+          sentChunks++;
+          const percentage = (sentChunks / totalChunks) * 100;
+
+          if (percentage - progressUpdated >= 1) {
+            progressUpdated = percentage;
+            updateProgressBar(messageId, percentage);
+          }
+
+          currentChunk++;
+          setTimeout(sendChunk, 0);
+        } catch (err) {
+          console.error("❌ Error sending chunk:", err);
+          hideProgressBar(messageId);
+          showAlert("Failed to send chunk.");
+          onComplete();
+        }
+      };
+
+      reader.onerror = () => {
+        console.error("❌ FileReader error during send");
+        hideProgressBar(messageId);
+        showAlert("Failed to read file chunk.");
+        onComplete();
+      };
+
+      reader.readAsArrayBuffer(slice);
+    };
+
+    sendChunk();
+    return;
+  }
+
+  const file = transfer.file;
+  const fileSize = file.size;
+  const chunkSize = CHUNK_SIZE;
+  const numChannels = mediaChannels.length;
+  const partSize = Math.ceil(fileSize / numChannels);
+  const chunkParts = [];
+
+  for (let i = 0; i < numChannels; i++) {
+    const start = i * partSize;
+    const end = Math.min(start + partSize, fileSize);
+    chunkParts[i] = [];
+
+    for (let offset = start; offset < end; offset += chunkSize) {
+      const slice = file.slice(offset, Math.min(offset + chunkSize, end));
+      chunkParts[i].push(slice);
+    }
+  }
+
+  transfer.chunkParts = chunkParts;
+  const totalSubChunks = chunkParts.flat().length;
+  let totalSentChunks = 0;
+  let progressUpdated = 0;
+
+  chunkParts.forEach((partChunks, majorIndex) => {
+    let subIndex = 0;
+
+    const sendNext = () => {
+      if (subIndex >= partChunks.length) return;
+
+      const channel = mediaChannels[majorIndex];
+
+      if (!channel || channel.readyState !== "open") {
+        console.warn(`Channel ${majorIndex} not ready`);
+        setTimeout(sendNext, 100);
+        return;
+      }
+
+      if (channel.bufferedAmount > 4 * 1024 * 1024) {
+        setTimeout(sendNext, 100);
+        return;
+      }
+
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        try {
+          const meta = new Uint32Array([majorIndex, subIndex, partChunks.length]);
+          const data = new Uint8Array(reader.result);
+          const combined = new Uint8Array(meta.byteLength + data.byteLength);
+          combined.set(new Uint8Array(meta.buffer), 0);
+          combined.set(data, meta.byteLength);
+          channel.send(combined.buffer);
+          totalSentChunks++;
+          const percentage = (totalSentChunks / totalSubChunks) * 100;
+
+          if (percentage - progressUpdated >= 1) {
+            progressUpdated = percentage;
+            updateProgressBar(messageId, percentage);
+          }
+
+          subIndex++;
+          setTimeout(sendNext, 0);
+        } catch (err) {
+          console.error("❌ Send error:", err);
+          hideProgressBar(messageId);
+          showAlert("Failed to send chunk");
+          onComplete();
+        }
+      };
+
+      reader.onerror = () => {
+        console.error("❌ FileReader error");
+        hideProgressBar(messageId);
+        showAlert("Failed to read chunk");
+        onComplete();
+      };
+
+      reader.readAsArrayBuffer(partChunks[subIndex]);
+    };
+
+    sendNext();
+  });
+
+  const checkComplete = setInterval(() => {
+    if (totalSentChunks >= totalSubChunks) {
+      clearInterval(checkComplete);
+      console.log("✅ File sending complete for messageId:", messageId);
+      hideProgressBar(messageId);
+      $("#chat-file").val("");
+      $("#btn-toggle-back").click();
+      currentFile = null;
+      activeTransfers.delete(messageId);
+      retryCounts.delete(messageId);
+      onComplete();
+    }
+  }, 300);
+}
+
+function resendFileChunk(messageId, majorIndex, chunkIndex) {
+  const transfer = activeTransfers.get(messageId);
+
+  if (!transfer || !transfer.chunkParts) {
+    console.warn(`Cannot resend chunk: missing transfer info or chunkParts`);
+    return;
+  }
+
+  const partChunks = transfer.chunkParts[majorIndex];
+
+  if (!partChunks || !partChunks[chunkIndex]) {
+    console.warn(`Chunk not found for resend: major ${majorIndex}, index ${chunkIndex}`);
+    return;
+  }
+
+  const channel = mediaChannels[majorIndex];
+
+  if (!channel || channel.readyState !== "open") {
+    console.warn(`Channel ${majorIndex} not ready for resend`);
+    setTimeout(() => resendFileChunk(messageId, majorIndex, chunkIndex), 200);
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = () => {
+    try {
+      const meta = new Uint32Array([majorIndex, chunkIndex, partChunks.length]);
+      const data = new Uint8Array(reader.result);
+      const combined = new Uint8Array(meta.byteLength + data.byteLength);
+      combined.set(new Uint8Array(meta.buffer), 0);
+      combined.set(data, meta.byteLength);
+      channel.send(combined.buffer);
+      console.log(`✅ Resent chunk [${majorIndex}-${chunkIndex}] for messageId: ${messageId}`);
+    } catch (error) {
+      console.error(`❌ Resend failed:`, error);
+    }
+  };
+
+  reader.onerror = () => {
+    console.error(`❌ FileReader error during resend for [${majorIndex}-${chunkIndex}]`);
+  };
+
+  reader.readAsArrayBuffer(partChunks[chunkIndex]);
+}
+
+function showProgressBar(messageId, isSender) {
+  const alignClass = isSender ? "self" : "other";
+  let fileName = "Unknown File";
+
+  if (isSender) {
+    fileName = activeTransfers.get(messageId)?.fileName || "Unknown File";
+  } else if (mediaReceivingChunks[messageId]?.fileInfo?.fileName) {
+    fileName = mediaReceivingChunks[messageId].fileInfo.fileName;
+  } else if (receivedTransfers.get(messageId)?.fileInfo?.fileName) {
+    fileName = receivedTransfers.get(messageId).fileInfo.fileName;
+  }
+
+  $("#chat-display").append(`
     <div class="chat-message ${alignClass} px-3" id="progress-${messageId}">
       <div class="file-name mt-2" style="font-size: 14px; font-weight: 500;">${truncateName(
         fileName,
@@ -71,10 +1102,25 @@ $("#chat-display").append(`
         </div>
       </div>
     </div>
-  `);$("#chat-display").scrollTop($("#chat-display")[0].scrollHeight)}
-function updateProgressBar(messageId,percentage){const roundedPercentage=Math.min(100,Math.round(percentage));$(`#progress-${messageId} .progress-bar`).css("width",`${roundedPercentage}%`).attr("aria-valuenow",roundedPercentage).find(".progress-percentage").text(`${roundedPercentage}%`)}
-function hideProgressBar(messageId){$(`#progress-${messageId}`).remove()}
-function showQueuedProgress(fakeId,fileName){$("#chat-display").append(`
+  `);
+  $("#chat-display").scrollTop($("#chat-display")[0].scrollHeight);
+}
+
+function updateProgressBar(messageId, percentage) {
+  const roundedPercentage = Math.min(100, Math.round(percentage));
+  $(`#progress-${messageId} .progress-bar`)
+    .css("width", `${roundedPercentage}%`)
+    .attr("aria-valuenow", roundedPercentage)
+    .find(".progress-percentage")
+    .text(`${roundedPercentage}%`);
+}
+
+function hideProgressBar(messageId) {
+  $(`#progress-${messageId}`).remove();
+}
+
+function showQueuedProgress(fakeId, fileName) {
+  $("#chat-display").append(`
     <div class="chat-message self px-3" id="${fakeId}">
       <div class="file-name mt-2" style="font-size: 14px; font-weight: 500;">${truncateName(
         fileName,
@@ -87,9 +1133,38 @@ function showQueuedProgress(fakeId,fileName){$("#chat-display").append(`
         </div>
       </div>
     </div>
-  `);$("#chat-display").scrollTop($("#chat-display")[0].scrollHeight)}
-function transitionToChat(){$("#ai-btn").addClass("d-none");if($("#chat-section").hasClass("d-none")){$("#login-section").removeClass("d-flex").addClass("d-none");$("#chat-section").removeClass("d-none");$("#peerIdSubmit").prop("disabled",!1).text("Disconnect");console.log("Transitioned to chat UI")}}
-function displayMessage(name,content,isSelf,type,file,messageId,status,fileType=null,fileSize=null){const alignClass=isSelf?"self":"other";const statusIcon=isSelf?`<span class="status-icon  ms-2" style="color: var(--wl-neon);"><i class="fas fa-check-double"></i></span>`:"";const timestamp=new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",});let messageContent=content;if(type==="text"){messageContent=formatTextMsg(content)}else if(type==="location"){const obj=typeof content==="string"?JSON.parse(content):content;const shortUrl=obj.url;messageContent=`
+  `);
+  $("#chat-display").scrollTop($("#chat-display")[0].scrollHeight);
+}
+
+function transitionToChat() {
+  $("#ai-btn").addClass("d-none");
+
+  if ($("#chat-section").hasClass("d-none")) {
+    $("#login-section").removeClass("d-flex").addClass("d-none");
+    $("#chat-section").removeClass("d-none");
+    $("#peerIdSubmit").prop("disabled", !1).text("Disconnect");
+    console.log("Transitioned to chat UI");
+  }
+}
+
+function displayMessage(name, content, isSelf, type, file, messageId, status, fileType = null, fileSize = null) {
+  const alignClass = isSelf ? "self" : "other";
+  const statusIcon = isSelf
+    ? `<span class="status-icon  ms-2" style="color: var(--wl-neon);"><i class="fas fa-check-double"></i></span>`
+    : "";
+  const timestamp = new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  let messageContent = content;
+
+  if (type === "text") {
+    messageContent = formatTextMsg(content);
+  } else if (type === "location") {
+    const obj = typeof content === "string" ? JSON.parse(content) : content;
+    const shortUrl = obj.url;
+    messageContent = `
       <div class="card shadow-sm border-0">
         <div class="ratio ratio-16x9">
           <iframe class="rounded" src="https://maps.google.com/maps?q=${obj.lat},${obj.lng}&z=15&output=embed" frameborder="0"></iframe>
@@ -98,18 +1173,32 @@ function displayMessage(name,content,isSelf,type,file,messageId,status,fileType=
           <div class="fw-bold mb-1 text-truncate">${shortUrl}</div>
           <a href="${shortUrl}" target="_blank" class="btn btn-sm btn-outline-primary w-100"><i class="fas fa-map-pin me-1"></i> Go to</a>
         </div>
-      </div>`}else if(type==="file"&&file){const isImage=fileType&&fileType.startsWith("image/");const isAudio=fileType&&fileType.startsWith("audio/");const isVideo=fileType&&fileType.startsWith("video/");const downloadButton=`<a href="${file}" download="${content}" class="btn btn-sm btn-secondary w-100 mt-2 d-block"><i class="fas fa-download me-2"></i>Download</a>`;const fileNameDisplay=`<div class="file-name" style="font-size: 13px; font-weight: 500;">${truncateName(
+      </div>`;
+  } else if (type === "file" && file) {
+    const isImage = fileType && fileType.startsWith("image/");
+    const isAudio = fileType && fileType.startsWith("audio/");
+    const isVideo = fileType && fileType.startsWith("video/");
+
+    const downloadButton = `<a href="${file}" download="${content}" class="btn btn-sm btn-secondary w-100 mt-2 d-block"><i class="fas fa-download me-2"></i>Download</a>`;
+    const fileNameDisplay = `<div class="file-name" style="font-size: 13px; font-weight: 500;">${truncateName(
       content,
       25
-    )}</div>`;const fileSizeAndType=`<div class="file-name" style="font-size: 10px;font-weight:500;">${formatBytes(
+    )}</div>`;
+    const fileSizeAndType = `<div class="file-name" style="font-size: 10px;font-weight:500;">${formatBytes(
       fileSize
     )} • <span class="text-uppercase">${content.slice(
       content.lastIndexOf(".") + 1
-    )}</span></div>`;if(isImage){messageContent=`
+    )}</span></div>`;
+
+    if (isImage) {
+      messageContent = `
       <div class="image-wrapper" style="max-width: 100%; overflow: hidden;">
         <img src="${file}" alt="${content}" class="img-fluid rounded mt-2" style="width: 100%; height: auto; object-fit: contain;" />
       </div>
-      <br>${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`}else if(isAudio){const containerId=`waveform-${Date.now()}`;messageContent=`
+      <br>${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`;
+    } else if (isAudio) {
+      const containerId = `waveform-${Date.now()}`;
+      messageContent = `
           <div class="card shadow-sm rounded-3 p-3 mb-2" style="background-color: #f8f9fa;">
             <div id="${containerId}" class="waveform rounded mb-3" style="width: 100%; height: 80px;"></div>
 
@@ -128,15 +1217,52 @@ function displayMessage(name,content,isSelf,type,file,messageId,status,fileType=
             ${fileSizeAndType}
             ${downloadButton}
           </div>
-        `;setTimeout(()=>{const wavesurfer=WaveSurfer.create({container:`#${containerId}`,waveColor:"#ccc",progressColor:"#0d6efd",height:80,responsive:!0,});wavesurfer.load(file);window[`player_${containerId}`]=wavesurfer},100)}else if(isVideo){messageContent=`
+        `;
+      setTimeout(() => {
+        const wavesurfer = WaveSurfer.create({
+          container: `#${containerId}`,
+          waveColor: "#ccc",
+          progressColor: "#0d6efd",
+          height: 80,
+          responsive: !0,
+        });
+        wavesurfer.load(file);
+        window[`player_${containerId}`] = wavesurfer;
+      }, 100);
+    } else if (isVideo) {
+      messageContent = `
       <div class="plyr-wrapper rounded overflow-hidden mt-2" style="max-width: 100%;">
         <video id="player-${Date.now()}" class="plyr w-100" controls playsinline style="object-fit: contain; min-height: 300px;">
           <source src="${file}" type="video/webm" />
         </video>
       </div>
-        <br>${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`;setTimeout(()=>{const players=Plyr.setup("video")},0)}else{let fileIconClass="fa-file text-dark";if(fileType==="application/pdf"){fileIconClass="fa-file-pdf text-danger"}else if(fileType.includes("word")){fileIconClass="fa-file-word text-primary"}else if(fileType==="application/vnd.ms-excel"||fileType==="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"){fileIconClass="fa-file-excel text-success"}else if(fileType==="application/vnd.ms-powerpoint"||fileType==="application/vnd.openxmlformats-officedocument.presentationml.presentation"){fileIconClass="fa-file-powerpoint text-warning"}else if(fileType.includes("zip")||fileType.includes("rar")){fileIconClass="fa-file-archive text-muted"}else if(fileType.includes("text")){fileIconClass="fa-file-lines text-secondary"}
-messageContent=`<i class="fas ${fileIconClass} me-2 fs-4"></i> ${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`}}
-try{$("#chat-display").append(`
+        <br>${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`;
+      setTimeout(() => {
+        const players = Plyr.setup("video");
+      }, 0);
+    } else {
+      let fileIconClass = "fa-file text-dark";
+
+      if (fileType === "application/pdf") {
+        fileIconClass = "fa-file-pdf text-danger";
+      } else if (fileType.includes("word")) {
+        fileIconClass = "fa-file-word text-primary";
+      } else if (fileType === "application/vnd.ms-excel" || fileType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
+        fileIconClass = "fa-file-excel text-success";
+      } else if (fileType === "application/vnd.ms-powerpoint" || fileType === "application/vnd.openxmlformats-officedocument.presentationml.presentation") {
+        fileIconClass = "fa-file-powerpoint text-warning";
+      } else if (fileType.includes("zip") || fileType.includes("rar")) {
+        fileIconClass = "fa-file-archive text-muted";
+      } else if (fileType.includes("text")) {
+        fileIconClass = "fa-file-lines text-secondary";
+      }
+
+      messageContent = `<i class="fas ${fileIconClass} me-2 fs-4"></i> ${fileNameDisplay} ${fileSizeAndType} ${downloadButton}`;
+    }
+  }
+
+  try {
+    $("#chat-display").append(`
       <div class="chat-message ${alignClass} px-3">
         <div class="message py-1" style="font-size:12px;font-weight:450;">${messageContent}</div>
         <div class="message-meta d-flex justify-content-end border-top border-secondary mt-2">
@@ -145,36 +1271,296 @@ try{$("#chat-display").append(`
           } ${timestamp} ${statusIcon}</span>
         </div>
       </div>
-    `);$("#chat-display").scrollTop($("#chat-display")[0].scrollHeight);console.log(`Displayed message for ${type}: ${content}, fileType: ${
-        fileType || "none"
-      }`)}catch(error){console.error(`Error displaying message for ${content}:`,error);showAlert("Failed to display message in UI. Please refresh the page.")}}
-function deletePeerFromSheet(peerId){if(!peerId){console.error("❌ peerId is undefined in deletePeerFromSheet");return}
-console.log(`🗑️ Cleaning up signaling data for peerId: ${peerId}`);fetch(SIGNALING_URL,{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({type:"cleanup",peerId:peerId}),}).then((res)=>res.json()).then((result)=>{console.log(`✅ Cleaned up signaling data for peerId: ${peerId}`,result)}).catch((err)=>console.error(`❌ Cleanup error for peerId: ${peerId}:`,err))}
-function cleanupSignalingData(peerId,type){if(!peerId){console.error("❌ peerId is undefined in cleanupSignalingData");return}
-console.log(`🗑️ Cleaning up ${type} data for peerId: ${peerId}`);fetch(SIGNALING_URL,{method:"POST",headers:{'Content-Type':'application/json'},body:JSON.stringify({type:"cleanup",peerId:peerId,cleanupType:type}),}).then((res)=>res.json()).then((result)=>{console.log(`✅ Cleaned up ${type} data for peerId: ${peerId}`,result)}).catch((err)=>console.error(`❌ Cleanup error for ${type} peerId: ${peerId}:`,err))}
-async function startJoinConnection(peerId){console.log(`🚀 Starting join connection for peerId: ${peerId}`);updateConnectionStatus("Waiting for offer...","10",!1);let startTime=Date.now();let pollCount=0;pollingInterval=setInterval(async()=>{pollCount++;const elapsed=Date.now()-startTime;console.log(`🔍 Poll #${pollCount} for offer (elapsed: ${Math.round(elapsed/1000)}s)`);if(elapsed>CONNECTION_TIMEOUT){console.log(`⏰ Connection timeout reached (${CONNECTION_TIMEOUT/1000}s), stopping polling`);clearInterval(pollingInterval);$("#joinPeer").prop("disabled",!1).text("Join");$("#peerIdSubmit").prop("disabled",!1).text("Connect");showAlert("No offer found. Please try again or check peer ID.");return}
-const offerEntry=await fetchSDP(peerId,"offer");const percent=Math.min((elapsed/CONNECTION_TIMEOUT)*100,99);updateConnectionStatus("Waiting for offer...",percent,!0);if(offerEntry){console.log(`✅ Offer SDP found for peerId: ${peerId} on poll #${pollCount}`);console.log(`🛑 Stopping polling for offers`);clearInterval(pollingInterval);try{console.log(`🔄 Proceeding as answerer...`);await setupAnswerer(offerEntry);updateConnectionStatus("Joined Successfully","100",!0);console.log(`🎉 Join connection completed successfully!`)}catch(error){console.error("❌ Error during join connection:",error);$("#joinPeer").prop("disabled",!1).text("Join");$("#peerIdSubmit").prop("disabled",!1).text("Connect");showAlert("Failed to join connection. Please try again.")}}else{console.log(`❌ No offer SDP found yet for peerId: ${peerId} (poll #${pollCount})`)}},3000);console.log(`⏰ Started polling for offers (timeout: ${CONNECTION_TIMEOUT/1000}s, interval: 3s)`)}
-function loadStunSettings(){const defaultStuns=["stun:global.stun.twilio.com:3478"];const savedStuns=JSON.parse(localStorage.getItem("selectedStunServers")||"[]");const selected=savedStuns.length>=1?savedStuns:defaultStuns;$(".stun-option").each(function(){$(this).prop("checked",selected.includes(this.value))})}
-function updateConnectionStatus(message,percent,isFinal=!1){$("#connectionStatusPanel").removeClass("d-none");$("#connectionStatusText").text(message);$("#connectionProgressBar").css("width",percent+"%");if(isFinal){$("#connectionProgressBar").removeClass("custom-bg").addClass("bg-success");$("#spin-border").addClass("text-success")}}
-function showAlert(message,isError=!0){const alertType=isError?"alert-danger":"alert-success";const alert=$(`
+    `);
+    $("#chat-display").scrollTop($("#chat-display")[0].scrollHeight);
+    console.log(`Displayed message for ${type}: ${content}, fileType: ${
+      fileType || "none"
+    }`);
+  } catch (error) {
+    console.error(`Error displaying message for ${content}:`, error);
+    showAlert("Failed to display message in UI. Please refresh the page.");
+  }
+}
+
+function deletePeerFromSheet(peerId) {
+  if (!peerId) {
+    console.error("❌ peerId is undefined in deletePeerFromSheet");
+    return;
+  }
+
+  console.log(`🗑️ Cleaning up signaling data for peerId: ${peerId}`);
+  fetch(SIGNALING_URL, {
+    method: "POST",
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ type: "cleanup", peerId: peerId }),
+  }).then((res) => res.json())
+    .then((result) => {
+      console.log(`✅ Cleaned up signaling data for peerId: ${peerId}`, result);
+    }).catch((err) => console.error(`❌ Cleanup error for peerId: ${peerId}:`, err));
+}
+
+function cleanupSignalingData(peerId, type) {
+  if (!peerId) {
+    console.error("❌ peerId is undefined in cleanupSignalingData");
+    return;
+  }
+
+  console.log(`🗑️ Cleaning up ${type} data for peerId: ${peerId}`);
+  fetch(SIGNALING_URL, {
+    method: "POST",
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ type: "cleanup", peerId: peerId, cleanupType: type }),
+  }).then((res) => res.json())
+    .then((result) => {
+      console.log(`✅ Cleaned up ${type} data for peerId: ${peerId}`, result);
+    }).catch((err) => console.error(`❌ Cleanup error for ${type} peerId: ${peerId}:`, err));
+}
+
+async function startJoinConnection(peerId) {
+  console.log(`🚀 Starting join connection for peerId: ${peerId}`);
+  updateConnectionStatus("Waiting for offer...", "10", !1);
+
+  let startTime = Date.now();
+  let pollCount = 0;
+
+  pollingInterval = setInterval(async () => {
+    pollCount++;
+    const elapsed = Date.now() - startTime;
+    console.log(`🔍 Poll #${pollCount} for offer (elapsed: ${Math.round(elapsed / 1000)}s)`);
+
+    if (elapsed > CONNECTION_TIMEOUT) {
+      console.log(`⏰ Connection timeout reached (${CONNECTION_TIMEOUT / 1000}s), stopping polling`);
+      clearInterval(pollingInterval);
+      $("#joinPeer").prop("disabled", !1).text("Join");
+      $("#peerIdSubmit").prop("disabled", !1).text("Connect");
+      showAlert("No offer found. Please try again or check peer ID.");
+      return;
+    }
+
+    const offerEntry = await fetchSDP(peerId, "offer");
+    const percent = Math.min((elapsed / CONNECTION_TIMEOUT) * 100, 99);
+    updateConnectionStatus("Waiting for offer...", percent, !0);
+
+    if (offerEntry) {
+      console.log(`✅ Offer SDP found for peerId: ${peerId} on poll #${pollCount}`);
+      console.log(`🛑 Stopping polling for offers`);
+      clearInterval(pollingInterval);
+
+      try {
+        console.log(`🔄 Proceeding as answerer...`);
+        await setupAnswerer(offerEntry);
+        updateConnectionStatus("Joined Successfully", "100", !0);
+        console.log(`🎉 Join connection completed successfully!`);
+      } catch (error) {
+        console.error("❌ Error during join connection:", error);
+        $("#joinPeer").prop("disabled", !1).text("Join");
+        $("#peerIdSubmit").prop("disabled", !1).text("Connect");
+        showAlert("Failed to join connection. Please try again.");
+      }
+    } else {
+      console.log(`❌ No offer SDP found yet for peerId: ${peerId} (poll #${pollCount})`);
+    }
+  }, 3000);
+
+  console.log(`⏰ Started polling for offers (timeout: ${CONNECTION_TIMEOUT / 1000}s, interval: 3s)`);
+}
+
+function loadStunSettings() {
+  const defaultStuns = ["stun:global.stun.twilio.com:3478"];
+  const savedStuns = JSON.parse(localStorage.getItem("selectedStunServers") || "[]");
+  const selected = savedStuns.length >= 1 ? savedStuns : defaultStuns;
+
+  $(".stun-option").each(function () {
+    $(this).prop("checked", selected.includes(this.value));
+  });
+}
+
+function updateConnectionStatus(message, percent, isFinal = !1) {
+  $("#connectionStatusPanel").removeClass("d-none");
+  $("#connectionStatusText").text(message);
+  $("#connectionProgressBar").css("width", percent + "%");
+
+  if (isFinal) {
+    $("#connectionProgressBar").removeClass("custom-bg").addClass("bg-success");
+    $("#spin-border").addClass("text-success");
+  }
+}
+
+function showAlert(message, isError = !0) {
+  const alertType = isError ? "alert-danger" : "alert-success";
+  const alert = $(`
       <div class="alert custom-alert ${alertType} alert-dismissible fade show fixed-top d-flex align-items-center rounded-pill" role="alert" style="top: 10px; left: 50%; transform: translateX(-50%); z-index: 2000;">
         <span class="${
           isError ? "text-danger" : "text-success"
         }">${message}</span>
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
       </div>
-    `);$("body").append(alert);setTimeout(function(){alert.fadeOut(1000,function(){$(this).remove()})},4000)}
-function truncateName(name,len=10){name=name.trim();return name.length>len?name.slice(0,len-3)+"...":name}
-function togglePlayPause(containerId){const player=window[`player_${containerId}`];const icon=document.getElementById(`icon-${containerId}`);if(!player)return;player.playPause();if(player.isPlaying()){icon.classList.remove("fa-play");icon.classList.add("fa-pause")}else{icon.classList.remove("fa-pause");icon.classList.add("fa-play")}}
-function processNextFileInQueue(){if(mediaSendQueue.length===0){isSendingFile=!1;return}
-const queuedItem=mediaSendQueue.shift();const file=queuedItem.file;const queueId=queuedItem.queueId;isSendingFile=!0;if(queueId){$(`#${queueId}`).remove()}
-const name=$("#chat-username").val()||"Anonymous";const messageId=Date.now().toString();const useSingleChannel=file.size<1024*1024;currentChunk=0;totalChunks=Math.ceil(file.size/CHUNK_SIZE);const chunkParts=[];const numChannels=mediaChannels.length;const partSize=Math.ceil(file.size/numChannels);for(let i=0;i<numChannels;i++){const start=i*partSize;const end=Math.min(start+partSize,file.size);chunkParts[i]=[];for(let offset=start;offset<end;offset+=CHUNK_SIZE){const slice=file.slice(offset,Math.min(offset+CHUNK_SIZE,end));chunkParts[i].push(slice)}}
-activeTransfers.set(messageId,{file,fileName:file.name,fileSize:file.size,fileType:file.type||"application/octet-stream",totalChunks:chunkParts.flat().length,chunkParts,useSingleChannel,});const metadata={type:"file",name,messageId,fileName:file.name,fileSize:file.size,fileType:file.type||"application/octet-stream",useSingleChannel,};try{dataChannel.send(JSON.stringify(metadata));const fileUrl=URL.createObjectURL(file);displayMessage(name,file.name,!0,"file",fileUrl,messageId,"sent",metadata.fileType,metadata.fileSize);showProgressBar(messageId,!0);setTimeout(()=>{sendFileChunks(messageId,()=>{isSendingFile=!1;processNextFileInQueue()})},100)}catch(error){console.error("Error sending file:",error);hideProgressBar(messageId);activeTransfers.delete(messageId);showAlert("Failed to send file. Please try again.");isSendingFile=!1;processNextFileInQueue()}}
-function handleIncomingChunk(arrayBuffer,messageId,channelLabel){const transfer=mediaReceivingChunks[messageId];if(!transfer||!transfer.fileInfo){console.warn(`⚠️ No fileInfo available for messageId: ${messageId}`);return}
-if(!transfer.buffers){transfer.buffers=[];transfer.receivedBytes=0}
-transfer.buffers.push(arrayBuffer);transfer.receivedBytes+=arrayBuffer.byteLength;const receivedSize=transfer.receivedBytes;const totalSize=transfer.fileInfo.fileSize;updateProgressBar(messageId,(receivedSize/totalSize)*100);if(receivedSize>=totalSize){try{const blob=new Blob(transfer.buffers,{type:transfer.fileInfo.fileType||"application/octet-stream",});const url=URL.createObjectURL(blob);displayMessage(transfer.fileInfo.name,transfer.fileInfo.fileName,!1,"file",url,messageId,"delivered",transfer.fileInfo.fileType,transfer.fileInfo.fileSize)}catch(err){console.error(`Error creating blob from chunks for ${messageId}:`,err);showAlert("Failed to reconstruct received file.")}
-hideProgressBar(messageId);delete mediaReceivingChunks[messageId]}}
-function showPeerOfflineModal(){if($("#peerOfflineModal").length>0)return;const modalHtml=`
+    `);
+
+  $("body").append(alert);
+
+  setTimeout(function () {
+    alert.fadeOut(1000, function () {
+      $(this).remove();
+    });
+  }, 4000);
+}
+
+function truncateName(name, len = 10) {
+  name = name.trim();
+  return name.length > len ? name.slice(0, len - 3) + "..." : name;
+}
+
+function togglePlayPause(containerId) {
+  const player = window[`player_${containerId}`];
+  const icon = document.getElementById(`icon-${containerId}`);
+
+  if (!player) return;
+
+  player.playPause();
+
+  if (player.isPlaying()) {
+    icon.classList.remove("fa-play");
+    icon.classList.add("fa-pause");
+  } else {
+    icon.classList.remove("fa-pause");
+    icon.classList.add("fa-play");
+  }
+}
+
+function processNextFileInQueue() {
+  if (mediaSendQueue.length === 0) {
+    isSendingFile = !1;
+    return;
+  }
+
+  const queuedItem = mediaSendQueue.shift();
+  const file = queuedItem.file;
+  const queueId = queuedItem.queueId;
+  isSendingFile = !0;
+
+  if (queueId) {
+    $(`#${queueId}`).remove();
+  }
+
+  const name = $("#chat-username").val() || "Anonymous";
+  const messageId = Date.now().toString();
+  const useSingleChannel = file.size < 1024 * 1024;
+  currentChunk = 0;
+  totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const chunkParts = [];
+  const numChannels = mediaChannels.length;
+  const partSize = Math.ceil(file.size / numChannels);
+
+  for (let i = 0; i < numChannels; i++) {
+    const start = i * partSize;
+    const end = Math.min(start + partSize, file.size);
+    chunkParts[i] = [];
+
+    for (let offset = start; offset < end; offset += CHUNK_SIZE) {
+      const slice = file.slice(offset, Math.min(offset + CHUNK_SIZE, end));
+      chunkParts[i].push(slice);
+    }
+  }
+
+  activeTransfers.set(messageId, {
+    file,
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type || "application/octet-stream",
+    totalChunks: chunkParts.flat().length,
+    chunkParts,
+    useSingleChannel,
+  });
+
+  const metadata = {
+    type: "file",
+    name,
+    messageId,
+    fileName: file.name,
+    fileSize: file.size,
+    fileType: file.type || "application/octet-stream",
+    useSingleChannel,
+  };
+
+  try {
+    dataChannel.send(JSON.stringify(metadata));
+    const fileUrl = URL.createObjectURL(file);
+    displayMessage(name, file.name, !0, "file", fileUrl, messageId, "sent", metadata.fileType, metadata.fileSize);
+    showProgressBar(messageId, !0);
+
+    setTimeout(() => {
+      sendFileChunks(messageId, () => {
+        isSendingFile = !1;
+        processNextFileInQueue();
+      });
+    }, 100);
+  } catch (error) {
+    console.error("Error sending file:", error);
+    hideProgressBar(messageId);
+    activeTransfers.delete(messageId);
+    showAlert("Failed to send file. Please try again.");
+    isSendingFile = !1;
+    processNextFileInQueue();
+  }
+}
+
+function handleIncomingChunk(arrayBuffer, messageId, channelLabel) {
+  const transfer = mediaReceivingChunks[messageId];
+
+  if (!transfer || !transfer.fileInfo) {
+    console.warn(`⚠️ No fileInfo available for messageId: ${messageId}`);
+    return;
+  }
+
+  if (!transfer.buffers) {
+    transfer.buffers = [];
+    transfer.receivedBytes = 0;
+  }
+
+  transfer.buffers.push(arrayBuffer);
+  transfer.receivedBytes += arrayBuffer.byteLength;
+
+  const receivedSize = transfer.receivedBytes;
+  const totalSize = transfer.fileInfo.fileSize;
+  updateProgressBar(messageId, (receivedSize / totalSize) * 100);
+
+  if (receivedSize >= totalSize) {
+    try {
+      const blob = new Blob(transfer.buffers, {
+        type: transfer.fileInfo.fileType || "application/octet-stream",
+      });
+      const url = URL.createObjectURL(blob);
+
+      displayMessage(
+        transfer.fileInfo.name,
+        transfer.fileInfo.fileName,
+        !1,
+        "file",
+        url,
+        messageId,
+        "delivered",
+        transfer.fileInfo.fileType,
+        transfer.fileInfo.fileSize
+      );
+    } catch (err) {
+      console.error(`Error creating blob from chunks for ${messageId}:`, err);
+      showAlert("Failed to reconstruct received file.");
+    }
+
+    hideProgressBar(messageId);
+    delete mediaReceivingChunks[messageId];
+  }
+}
+
+function showPeerOfflineModal() {
+  if ($("#peerOfflineModal").length > 0) return;
+
+  const modalHtml = `
     <div class="modal fade" id="peerOfflineModal" tabindex="-1" aria-labelledby="peerOfflineModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content text-center">
@@ -190,10 +1576,115 @@ function showPeerOfflineModal(){if($("#peerOfflineModal").length>0)return;const 
         </div>
       </div>
     </div>
-  `;$("body").append(modalHtml);const modal=new bootstrap.Modal(document.getElementById("peerOfflineModal"));modal.show()}
-function formatTextMsg(text){if(!text)return"";text=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");text=text.replace(/`([^`]+?)`/g,"<code>$1</code>");text=text.replace(/\*([^\*]+?)\*/g,"<strong>$1</strong>");text=text.replace(/_([^_]+?)_/g,"<em>$1</em>");text=text.replace(/~([^~]+?)~/g,"<s>$1</s>");text=text.replace(/(https?:\/\/[^\s]+)/g,`<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>`);return text.replace(/\n/g,"<br>")}
-function formatBytes(sizeInBytes){const units=["Bytes","KB","MB","GB","TB"];if(sizeInBytes===0)return"0 Bytes";const i=Math.floor(Math.log(sizeInBytes)/Math.log(1024));const size=sizeInBytes/Math.pow(1024,i);return `${size < 10 ? size.toFixed(1) : Math.round(size)} ${units[i]}`}
-function showImagePreview(imageSrc,filename,filesize){const modal=document.getElementById('imagePreviewModal');const img=document.getElementById('imagePreviewImg');const filenameEl=document.getElementById('imagePreviewFilename');img.src=imageSrc;filenameEl.textContent=filename||'Image';modal.setAttribute('data-current-src',imageSrc);modal.setAttribute('data-current-filename',filename||'Image');modal.classList.remove('d-none');document.body.style.overflow='hidden'}
-function hideImagePreview(){const modal=document.getElementById('imagePreviewModal');modal.classList.add('d-none');document.body.style.overflow=''}
-function downloadImage(){const modal=document.getElementById('imagePreviewModal');const imageSrc=modal.getAttribute('data-current-src');const filename=modal.getAttribute('data-current-filename');if(imageSrc){const link=document.createElement('a');link.href=imageSrc;link.download=filename||'image';document.body.appendChild(link);link.click();document.body.removeChild(link)}}
-$(document).ready(()=>{$('#imagePreviewClose').click(hideImagePreview);$('#imagePreviewDownload').click(downloadImage);$('#imagePreviewModal').click(function(e){if(e.target===this){hideImagePreview()}});$(document).keydown(function(e){if(e.key==='Escape'&&!$('#imagePreviewModal').hasClass('d-none')){hideImagePreview()}});$(document).on('click','.chat-message img',function(e){e.preventDefault();const img=$(this);const src=img.attr('src');const alt=img.attr('alt')||'Image';let fileSize=null;const messageContainer=img.closest('.chat-message');const fileSizeElements=messageContainer.find('.file-name, .text-end, .mb-3');fileSizeElements.each(function(){const text=$(this).text();if(text&&(text.includes('KB')||text.includes('MB')||text.includes('GB')||text.includes('Bytes'))){const match=text.match(/(\d+(?:\.\d+)?\s*(?:Bytes|KB|MB|GB|TB))/i);if(match){fileSize=match[1];return!1}}});showImagePreview(src,alt,fileSize)})})
+  `;
+
+  $("body").append(modalHtml);
+  const modal = new bootstrap.Modal(document.getElementById("peerOfflineModal"));
+  modal.show();
+}
+
+function formatTextMsg(text) {
+  if (!text) return "";
+
+  text = text.replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
+  text = text.replace(/`([^`]+?)`/g, "<code>$1</code>");
+  text = text.replace(/\*([^\*]+?)\*/g, "<strong>$1</strong>");
+  text = text.replace(/_([^_]+?)_/g, "<em>$1</em>");
+  text = text.replace(/~([^~]+?)~/g, "<s>$1</s>");
+  text = text.replace(/(https?:\/\/[^\s]+)/g, `<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>`);
+
+  return text.replace(/\n/g, "<br>");
+}
+
+function formatBytes(sizeInBytes) {
+  const units = ["Bytes", "KB", "MB", "GB", "TB"];
+
+  if (sizeInBytes === 0) return "0 Bytes";
+
+  const i = Math.floor(Math.log(sizeInBytes) / Math.log(1024));
+  const size = sizeInBytes / Math.pow(1024, i);
+
+  return `${size < 10 ? size.toFixed(1) : Math.round(size)} ${units[i]}`;
+}
+
+function showImagePreview(imageSrc, filename, filesize) {
+  const modal = document.getElementById('imagePreviewModal');
+  const img = document.getElementById('imagePreviewImg');
+  const filenameEl = document.getElementById('imagePreviewFilename');
+
+  img.src = imageSrc;
+  filenameEl.textContent = filename || 'Image';
+  modal.setAttribute('data-current-src', imageSrc);
+  modal.setAttribute('data-current-filename', filename || 'Image');
+  modal.classList.remove('d-none');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideImagePreview() {
+  const modal = document.getElementById('imagePreviewModal');
+  modal.classList.add('d-none');
+  document.body.style.overflow = '';
+}
+
+function downloadImage() {
+  const modal = document.getElementById('imagePreviewModal');
+  const imageSrc = modal.getAttribute('data-current-src');
+  const filename = modal.getAttribute('data-current-filename');
+
+  if (imageSrc) {
+    const link = document.createElement('a');
+    link.href = imageSrc;
+    link.download = filename || 'image';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+}
+
+$(document).ready(() => {
+  $('#imagePreviewClose').click(hideImagePreview);
+  $('#imagePreviewDownload').click(downloadImage);
+
+  $('#imagePreviewModal').click(function (e) {
+    if (e.target === this) {
+      hideImagePreview();
+    }
+  });
+
+  $(document).keydown(function (e) {
+    if (e.key === 'Escape' && !$('#imagePreviewModal').hasClass('d-none')) {
+      hideImagePreview();
+    }
+  });
+
+  $(document).on('click', '.chat-message img', function (e) {
+    e.preventDefault();
+    const img = $(this);
+    const src = img.attr('src');
+    const alt = img.attr('alt') || 'Image';
+    let fileSize = null;
+
+    const messageContainer = img.closest('.chat-message');
+    const fileSizeElements = messageContainer.find('.file-name, .text-end, .mb-3');
+
+    fileSizeElements.each(function () {
+      const text = $(this).text();
+
+      if (text && (text.includes('KB') || text.includes('MB') || text.includes('GB') || text.includes('Bytes'))) {
+        const match = text.match(/(\d+(?:\.\d+)?\s*(?:Bytes|KB|MB|GB|TB))/i);
+
+        if (match) {
+          fileSize = match[1];
+          return !1;
+        }
+      }
+    });
+
+    showImagePreview(src, alt, fileSize);
+  });
+});
