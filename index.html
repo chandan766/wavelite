@@ -885,9 +885,10 @@
           m.addedNodes.forEach(function (node) {
             if (node.nodeType !== 1 || !node.id || !node.id.startsWith('progress-')) return;
             var mid = node.id.replace('progress-', '');
-            var target = document.querySelector('[data-message-id="' + mid + '"]');
+            var target = document.querySelector('[data-message-id="' + mid + '"] .file-icon-box')
+                      || document.querySelector('[data-message-id="' + mid + '"]');
 
-            if (target && target.classList.contains('chat-message')) {
+            if (target) {
               target.style.position = 'relative';
               target.classList.add('file-uploading');
               var ov = document.createElement('div');
@@ -933,6 +934,8 @@
           ring.style.strokeDashoffset = circ - (r / 100) * circ;
         }
         if (pct) pct.textContent = r + '%';
+        var statusEl = document.querySelector('[data-message-id="' + messageId + '"] .file-status');
+        if (statusEl) statusEl.textContent = 'Receiving... ' + r + '%';
       };
 
       /* ---- Overlay removal — no file chaining needed (script.js owns the queue) ---- */

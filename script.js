@@ -726,11 +726,12 @@ function setupDataChannel() {
         var isWaiting = currentReceivingMessageId !== null && currentReceivingMessageId !== msg.messageId;
         var statusLabel = isWaiting ? 'Waiting...' : 'Receiving...';
         var placeholderHtml = '<div class="chat-message other px-3" data-message-id="' + msg.messageId + '" data-status="' + (isWaiting ? 'waiting' : 'receiving') + '">' +
-          '<div class="message py-1" style="font-size:12px;font-weight:450;">' +
-          '<i class="fas fa-file text-dark me-2 fs-4"></i>' +
+          '<div class="message py-1 d-flex align-items-center" style="font-size:12px;font-weight:450;">' +
+          '<div class="file-icon-box" style="width:40px;height:40px;min-width:40px;border-radius:6px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;"><i class="fas fa-file text-dark fs-4"></i></div>' +
+          '<div class="file-text-block ms-2">' +
           '<div class="file-name" style="font-size: 13px; font-weight: 500;">' + (msg.fileName || 'Receiving file...') + '</div>' +
-          '<div class="file-name" style="font-size: 10px;font-weight:500;">' + statusLabel + '</div>' +
-          '</div></div>';
+          '<div class="file-name file-status" style="font-size: 10px;font-weight:500;">' + statusLabel + '</div>' +
+          '</div></div></div>';
         $("#chat-display").append(placeholderHtml);
 
         if (!isWaiting) {
@@ -1524,6 +1525,23 @@ function processNextFileInQueue() {
     var item = pendingSendBatch.shift();
     isSendingFile = !0;
     $(`#${item.queueId}`).remove();
+
+    const name = $("#chat-username").val() || "Anonymous";
+    const transfer = activeTransfers.get(item.messageId);
+    const fileUrl = URL.createObjectURL(item.file);
+    displayMessage(
+      name,
+      item.file.name,
+      !0,
+      "file",
+      fileUrl,
+      item.messageId,
+      "sent",
+      transfer?.fileType || item.file.type || "application/octet-stream",
+      transfer?.fileSize || item.file.size
+    );
+    showProgressBar(item.messageId, !0);
+
     setTimeout(() => { sendFileChunks(item.messageId); }, 100);
     return;
   }
