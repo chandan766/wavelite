@@ -63,6 +63,10 @@
   --wl-blur: 20px;
 
   /* Radius — organic, flowing */
+  --wl-blue-bg: rgba(37, 99, 235, 0.08);
+  --wl-blue-hover: #1D4ED8;
+  --wl-danger-bg: rgba(239, 68, 68, 0.10);
+
   --wl-r-sm: 12px;
   --wl-r: 16px;
   --wl-r-lg: 24px;
@@ -1694,6 +1698,167 @@ img { max-width: 100%; height: auto; }
   text-align: right;
 }
 
+/* ============================================
+   FILE ATTACHMENT PANEL
+   ============================================ */
+#media-input-group { display: none !important; }
+#text-input-group { display: flex !important; }
+
+.file-attachment-panel {
+  padding: 12px 16px;
+  background: var(--wl-surface);
+  border-top: 1px solid var(--wl-border-subtle);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+#file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--wl-slate-50);
+  border: 1px solid var(--wl-border-subtle);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: calc(50% - 4px);
+  min-width: 0;
+  box-sizing: border-box;
+  animation: card-in 0.25s var(--wl-ease);
+}
+
+.file-card-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: var(--wl-blue-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--wl-blue);
+  font-size: 0.9rem;
+}
+
+.file-card-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-card-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--wl-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.file-card-size {
+  font-size: 0.68rem;
+  color: var(--wl-text-secondary);
+  margin-top: 1px;
+}
+
+.file-card-remove {
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: var(--wl-danger-bg);
+  color: var(--wl-danger);
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  flex-shrink: 0;
+  transition: background 0.2s var(--wl-ease);
+}
+
+.file-card-remove:hover { background: var(--wl-danger); color: white; }
+
+@keyframes card-in {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.file-send-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--wl-border-subtle);
+}
+
+.file-count-badge {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--wl-text-secondary);
+}
+
+.file-send-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-clear-all,
+.btn-send-all {
+  border: none;
+  border-radius: 6px;
+  padding: 5px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: background 0.2s var(--wl-ease), color 0.2s var(--wl-ease);
+}
+
+.btn-clear-all {
+  background: var(--wl-danger-bg);
+  color: var(--wl-danger);
+}
+
+.btn-clear-all:hover { background: var(--wl-danger); color: white; }
+
+.btn-send-all {
+  background: var(--wl-blue);
+  color: white;
+}
+
+.btn-send-all:hover { background: var(--wl-blue-hover); }
+
+/* Incoming file type badge */
+.file-type-badge {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--wl-blue), var(--wl-cyan));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1rem;
+  flex-shrink: 0;
+  margin-bottom: 8px;
+}
+
+/* Cancel Join button spacing */
+#cancelJoinBtn {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 /* Hide old connection status panel */
 #connectionStatusPanel {
   display: none !important;
@@ -1833,6 +1998,9 @@ img { max-width: 100%; height: auto; }
     --wl-shadow-md: 0 4px 16px rgba(0, 0, 0, 0.25);
     --wl-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.3);
     --wl-shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.35);
+    --wl-blue-bg: rgba(37, 99, 235, 0.15);
+    --wl-blue-hover: #2563EB;
+    --wl-danger-bg: rgba(239, 68, 68, 0.15);
   }
 
   body, html { color: #E2E8F0; }
@@ -1945,6 +2113,14 @@ img { max-width: 100%; height: auto; }
   .upload-overlay {
     background: rgba(0, 0, 0, 0.5);
   }
+
+  .file-attachment-panel { background: #1E293B; border-top-color: #334155; }
+  .file-card { background: #0B1120; border-color: #334155; }
+  .file-card-name { color: #E2E8F0; }
+  .file-card-size { color: #94A3B8; }
+  .file-card-icon { background: rgba(37, 99, 235, 0.15); }
+  .file-count-badge { color: #94A3B8; }
+  .file-send-bar { border-top-color: #334155; }
 }
 
 /* ============================================

@@ -113,6 +113,11 @@
           <i class="fas fa-cog"></i>Settings
         </button>
       </div>
+
+      <!-- Cancel Join (hidden by default) -->
+      <button class="btn-tertiary d-none" id="cancelJoinBtn">
+        <i class="fas fa-times me-1"></i>Cancel Join
+      </button>
     </div>
 
     <!-- Hidden form (required by existing JS) -->
@@ -175,7 +180,7 @@
           <i class="fas fa-times"></i>
         </button>
         <div class="file-input-area">
-          <input type="file" id="chat-file" class="visually-hidden">
+          <input type="file" id="chat-file" class="visually-hidden" multiple>
           <button type="button" id="btn-choose-file" title="Choose file">
             <i class="fas fa-folder-open"></i>
           </button>
@@ -190,6 +195,22 @@
         <button id="btn-send-media" title="Send file">
           <i class="fas fa-paper-plane"></i>
         </button>
+      </div>
+
+      <!-- Modern file attachment panel -->
+      <div id="file-attachment-panel" class="file-attachment-panel d-none">
+        <div id="file-list"></div>
+        <div class="file-send-bar">
+          <span id="file-count-badge" class="file-count-badge"></span>
+          <div class="file-send-actions">
+            <button id="btn-clear-all-files" class="btn-clear-all" title="Clear all files">
+              <i class="fas fa-trash-can"></i> Clear all
+            </button>
+            <button id="btn-send-all-files" class="btn-send-all" title="Send all files">
+              <i class="fas fa-paper-plane"></i> Send all
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -607,6 +628,48 @@
         setTagline('Initializing...', true);
       });
 
+      /* ---- Joining dots animation ---- */
+      var dotsInterval = null;
+      function startDots() {
+        stopDots();
+        var statusEl = document.getElementById('connectionCircleStatus');
+        var baseText = statusEl ? statusEl.textContent.replace(/\.+$/, '') : '';
+        var c = 0;
+        dotsInterval = setInterval(function () {
+          c = (c + 1) % 4;
+          if (statusEl) statusEl.textContent = baseText + '.'.repeat(c);
+        }, 500);
+      }
+      function stopDots() {
+        if (dotsInterval) { clearInterval(dotsInterval); dotsInterval = null; }
+        var statusEl = document.getElementById('connectionCircleStatus');
+        if (statusEl) statusEl.textContent = statusEl.textContent.replace(/\.+$/, '');
+      }
+
+      /* ---- Cancel Join ---- */
+      var cancelJoinBtn = document.getElementById('cancelJoinBtn');
+      cancelJoinBtn.addEventListener('click', function () {
+        document.getElementById('delete-all-btn').click();
+      });
+      function showCancelBtn() { cancelJoinBtn.classList.remove('d-none'); }
+      function hideCancelBtn() { cancelJoinBtn.classList.add('d-none'); }
+
+      /* ---- Patch startTimer to show cancel btn + start dots ---- */
+      var origStartTimer = startTimer;
+      startTimer = function (mode) {
+        origStartTimer(mode);
+        showCancelBtn();
+        startDots();
+      };
+
+      /* ---- Patch showConnected to hide cancel btn + stop dots ---- */
+      var origShowConnected = showConnected;
+      showConnected = function () {
+        origShowConnected();
+        hideCancelBtn();
+        stopDots();
+      };
+
       var chatObs = new MutationObserver(function (mutations) {
         mutations.forEach(function (m) {
           if (m.attributeName === 'class') {
@@ -641,6 +704,8 @@
               circle.classList.remove('searching');
               resetFill();
               resetTagline();
+              hideCancelBtn();
+              stopDots();
               var icon = document.getElementById('connectionCircleIcon');
               var st = document.getElementById('connectionCircleStatus');
               var tmr = document.getElementById('connectionCircleTimer');
@@ -654,13 +719,13 @@
     })();
   </script>
 
-  <!-- File Input Handler -->
+  <!-- File Input Handler — Multi-file + File Cards -->
   <script>
-    document.addEventListener('DOMContentLoaded', function () {
+    (function () {
       var fileInput = document.getElementById('chat-file');
       var chooseBtn = document.getElementById('btn-choose-file');
       var clearBtn = document.getElementById('clear-file');
-      var fileName = document.getElementById('selected-file-name');
+      var fileNameEl = document.getElementById('selected-file-name');
       var fileInfoFloat = document.getElementById('fileInfoFloat');
       var fileInfoName = document.getElementById('fileInfoName');
       var fileInfoClear = document.getElementById('fileInfoClear');
@@ -668,88 +733,117 @@
       var mediaGroup = document.getElementById('media-input-group');
       var msgInput = document.getElementById('chat-message');
       var sendMedia = document.getElementById('btn-send-media');
+      var filePanel = document.getElementById('file-attachment-panel');
+      var fileList = document.getElementById('file-list');
+      var countBadge = document.getElementById('file-count-badge');
+      var clearAllBtn = document.getElementById('btn-clear-all-files');
+      var sendAllBtn = document.getElementById('btn-send-all-files');
 
-      if (!fileInput || !chooseBtn || !fileName) return;
+      /* ---- Keep text input always visible, hide media group ---- */
+      if (mediaGroup) mediaGroup.classList.add('d-none');
+      if (textGroup) textGroup.classList.remove('d-none');
 
-      function showFileInfo(name) {
-        if (fileInfoFloat && fileInfoName) {
-          fileInfoName.textContent = name;
-          fileInfoFloat.classList.remove('d-none');
-        }
+      /* ---- Selected files store ---- */
+      var selectedFiles = [];
+      window._wlSelectedFiles = selectedFiles;
+
+      /* ---- Helpers ---- */
+      function getFileIcon(name) {
+        var ext = name.split('.').pop().toLowerCase();
+        var icons = { pdf:'fa-file-pdf', doc:'fa-file-word', docx:'fa-file-word', xls:'fa-file-excel', xlsx:'fa-file-excel', zip:'fa-file-zipper', rar:'fa-file-zipper', gz:'fa-file-zipper', jpg:'fa-file-image', jpeg:'fa-file-image', png:'fa-file-image', gif:'fa-file-image', webp:'fa-file-image', mp4:'fa-file-video', webm:'fa-file-video', mov:'fa-file-video', mp3:'fa-file-audio', wav:'fa-file-audio', ogg:'fa-file-audio', txt:'fa-file-lines', json:'fa-file-code', js:'fa-file-code', html:'fa-file-code', css:'fa-file-code' };
+        return icons[ext] || 'fa-file';
       }
-
-      function hideFileInfo() {
-        if (fileInfoFloat) {
-          fileInfoFloat.classList.add('d-none');
-        }
+      function formatSize(bytes) {
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1048576) return (bytes/1024).toFixed(1) + ' KB';
+        return (bytes/1048576).toFixed(1) + ' MB';
       }
+      function hidePanel() { if (filePanel) filePanel.classList.add('d-none'); }
+      function showPanel() { if (filePanel) filePanel.classList.remove('d-none'); }
+      function hideFileInfo() { if (fileInfoFloat) fileInfoFloat.classList.add('d-none'); }
 
-      function switchToTextInput() {
-        mediaGroup.classList.add('d-none');
-        textGroup.classList.remove('d-none');
-        hideFileInfo();
-        if (msgInput) {
-          msgInput.value = '';
-          msgInput.focus();
-        }
-      }
-
-      chooseBtn.addEventListener('click', function () { fileInput.click(); });
-
-      fileInput.addEventListener('change', function () {
-        if (fileInput.files && fileInput.files.length > 0) {
-          var name = fileInput.files[0].name;
-          fileName.textContent = name;
-          showFileInfo(name);
-          if (clearBtn) clearBtn.classList.remove('d-none');
-        } else {
-          fileName.textContent = 'No file selected';
-          hideFileInfo();
+      function renderFiles() {
+        if (fileList) fileList.innerHTML = '';
+        if (selectedFiles.length === 0) {
+          hidePanel();
           if (clearBtn) clearBtn.classList.add('d-none');
+          if (fileNameEl) fileNameEl.textContent = 'No file selected';
+          return;
         }
+        showPanel();
+        if (countBadge) countBadge.textContent = selectedFiles.length + ' file' + (selectedFiles.length !== 1 ? 's' : '') + ' selected';
+        if (fileNameEl) fileNameEl.textContent = selectedFiles.length + ' file(s) ready';
+
+        selectedFiles.forEach(function (file, index) {
+          var card = document.createElement('div');
+          card.className = 'file-card';
+          card.innerHTML = '<div class="file-card-icon"><i class="fas ' + getFileIcon(file.name) + '"></i></div><div class="file-card-info"><div class="file-card-name" title="' + file.name.replace(/"/g,'&quot;') + '">' + file.name.replace(/</g,'&lt;') + '</div><div class="file-card-size">' + formatSize(file.size) + '</div></div><button class="file-card-remove" data-index="' + index + '" title="Remove"><i class="fas fa-times"></i></button>';
+          fileList.appendChild(card);
+        });
+
+        fileList.querySelectorAll('.file-card-remove').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var idx = parseInt(this.dataset.index);
+            selectedFiles.splice(idx, 1);
+            renderFiles();
+            if (selectedFiles.length === 0) { fileInput.value = ''; }
+          });
+        });
+      }
+
+      /* ---- File selection ---- */
+      if (chooseBtn) chooseBtn.addEventListener('click', function () { fileInput.click(); });
+
+      if (fileInput) {
+        fileInput.addEventListener('change', function () {
+          if (window._wlSending) { fileInput.value = ''; return; }
+          if (fileInput.files && fileInput.files.length > 0) {
+            for (var i = 0; i < fileInput.files.length; i++) {
+              selectedFiles.push(fileInput.files[i]);
+            }
+            renderFiles();
+            fileInput.value = '';
+          }
+        });
+      }
+
+      /* ---- Clear all ---- */
+      if (clearAllBtn) clearAllBtn.addEventListener('click', function () {
+        selectedFiles.length = 0;
+        renderFiles();
+        fileInput.value = '';
+        if (fileNameEl) fileNameEl.textContent = 'No file selected';
+        hideFileInfo();
+        if (clearBtn) clearBtn.classList.add('d-none');
       });
 
-      if (clearBtn) {
-        clearBtn.addEventListener('click', function () {
-          fileInput.value = '';
-          fileInput.dispatchEvent(new Event('change'));
-        });
-      }
+      /* ---- Override showFileInput to keep text input visible ---- */
+      window.showFileInput = function () {
+        if (msgInput) msgInput.focus();
+      };
 
+      /* ---- Clean up old stuff ---- */
       if (fileInfoClear) {
         fileInfoClear.addEventListener('click', function () {
+          selectedFiles.length = 0;
+          renderFiles();
           fileInput.value = '';
-          fileName.textContent = 'No file selected';
+          if (fileNameEl) fileNameEl.textContent = 'No file selected';
           hideFileInfo();
           if (clearBtn) clearBtn.classList.add('d-none');
         });
       }
-
-      if (sendMedia) {
-        sendMedia.addEventListener('click', function () {
-          setTimeout(function () { switchToTextInput(); }, 100);
-        });
-      }
-
-      var toggleBack = document.getElementById('btn-toggle-back');
-      if (toggleBack) {
-        toggleBack.addEventListener('click', function () {
-          fileInput.value = '';
-          fileName.textContent = 'No file selected';
-          hideFileInfo();
-          if (clearBtn) clearBtn.classList.add('d-none');
-        });
-      }
-    });
+    })();
   </script>
 
-  <!-- File Upload Progress Overlay -->
+  <!-- File Upload Progress Overlay + Sequential Multi-file Send + Incoming File Card -->
   <script>
     (function () {
+      /* ---- Progress Ring + Overlay ---- */
       var chatDisplay = document.getElementById('chat-display');
       if (!chatDisplay) return;
 
-      var obs = new MutationObserver(function (mutations) {
+      var fileObs = new MutationObserver(function (mutations) {
         mutations.forEach(function (m) {
           m.addedNodes.forEach(function (node) {
             if (node.nodeType !== 1 || !node.id || !node.id.startsWith('progress-')) return;
@@ -757,6 +851,7 @@
             var prev = node.previousElementSibling;
 
             if (prev && prev.classList.contains('chat-message')) {
+              /* Sender: overlay ring on file bubble */
               prev.style.position = 'relative';
               prev.classList.add('file-uploading');
               var ov = document.createElement('div');
@@ -765,13 +860,31 @@
               prev.appendChild(ov);
               node.style.display = 'none';
             } else {
+              /* Receiver: incoming file card */
               node.classList.add('progress-premium');
+              enhanceIncomingFileCard(node, mid);
             }
           });
         });
       });
-      obs.observe(chatDisplay, { childList: true });
+      fileObs.observe(chatDisplay, { childList: true });
 
+      /* ---- Incoming file card enhancement ---- */
+      function enhanceIncomingFileCard(el, mid) {
+        var textEl = el.querySelector('.file-info, .file-name, .chat-message-text');
+        if (!textEl) return;
+        var name = textEl.textContent || 'file';
+        if (name.length > 80) name = name.slice(0, 80);
+        var ext = name.split('.').pop().toLowerCase();
+        var iconMap = { pdf:'fa-file-pdf', doc:'fa-file-word', docx:'fa-file-word', xls:'fa-file-excel', xlsx:'fa-file-excel', zip:'fa-file-zipper', rar:'fa-file-zipper', gz:'fa-file-zipper', jpg:'fa-file-image', jpeg:'fa-file-image', png:'fa-file-image', gif:'fa-file-image', webp:'fa-file-image', mp4:'fa-file-video', webm:'fa-file-video', mov:'fa-file-video', mp3:'fa-file-audio', wav:'fa-file-audio', ogg:'fa-file-audio', txt:'fa-file-lines', json:'fa-file-code', js:'fa-file-code', html:'fa-file-code', css:'fa-file-code' };
+        var icon = iconMap[ext] || 'fa-file';
+        var badge = document.createElement('div');
+        badge.className = 'file-type-badge';
+        badge.innerHTML = '<i class="fas ' + icon + '"></i>';
+        el.insertBefore(badge, el.firstChild);
+      }
+
+      /* ---- Progress bar overrides ---- */
       var origUPB = window.updateProgressBar;
       window.updateProgressBar = function (messageId, percentage) {
         if (origUPB) origUPB(messageId, percentage);
@@ -787,8 +900,12 @@
         if (pct) pct.textContent = r + '%';
       };
 
+      /* ---- Sequential multi-file send ---- */
+      var fileQueue = [];
+      var sending = false;
       var origHPB = window.hideProgressBar;
       window.hideProgressBar = function (messageId) {
+        /* Remove overlay */
         var upl = document.querySelector('.file-uploading');
         if (upl) {
           var ov = upl.querySelector('.upload-overlay');
@@ -798,7 +915,62 @@
           }
         }
         if (origHPB) origHPB(messageId);
+        /* Chain next file send */
+        setTimeout(function () {
+          if (fileQueue.length > 0) {
+            injectAndSend(fileQueue.shift());
+          } else {
+            sending = false;
+            window._wlSending = false;
+          }
+        }, 500);
       };
+
+      function injectAndSend(file) {
+        var fi = document.getElementById('chat-file');
+        var sm = document.getElementById('btn-send-media');
+        if (!fi || !sm) return;
+        var dt = new DataTransfer();
+        dt.items.add(file);
+        try {
+          var nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'files').set;
+          nativeSetter.call(fi, dt.files);
+        } catch(e) {
+          try { Object.defineProperty(fi, 'files', { get: function() { return dt.files; }, configurable: true }); } catch(e2) {}
+        }
+        fi.dispatchEvent(new Event('change', { bubbles: true }));
+        sm.click();
+      }
+
+      /* ---- Wire "Send all" button ---- */
+      var sendAllBtn = document.getElementById('btn-send-all-files');
+      if (sendAllBtn) {
+        sendAllBtn.addEventListener('click', function () {
+          /* Capture files from the global selectedFiles array */
+          var sf = [];
+          var sc = document.querySelector('.file-card-name');
+          /* We need to access selectedFiles from the other IIFE — use a shared global */
+          var src = window._wlSelectedFiles;
+          if (src && src.length > 0) {
+            sf = src.slice();
+            src.length = 0;
+            /* Also clear file panel */
+            var panel = document.getElementById('file-attachment-panel');
+            var list = document.getElementById('file-list');
+            if (panel) panel.classList.add('d-none');
+            if (list) list.innerHTML = '';
+            var badge = document.getElementById('file-count-badge');
+            if (badge) badge.textContent = '';
+            var fn = document.getElementById('selected-file-name');
+            if (fn) fn.textContent = 'No file selected';
+          }
+          if (sf.length === 0) return;
+          fileQueue = sf;
+          sending = true;
+          window._wlSending = true;
+          injectAndSend(fileQueue.shift());
+        });
+      }
     })();
   </script>
 </body>
