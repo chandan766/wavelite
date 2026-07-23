@@ -1,1 +1,112 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>About - WaveLite Chat</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"><link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet"><link rel="stylesheet" href="style.css"><style>.about-emoji{font-size:1.3rem}</style></head><body><header class="header scrolled"><div class="page-nav"><i class="fa-solid fa-angle-left back-icon" onclick="window.location.href=&#34;index.html&#34;"></i> <span><i class="fa-solid fa-circle-info"></i>About</span></div></header><div class="page-shell"><div class="wave-bg"><svg class="wave-1" viewBox="0 0 1440 320" preserveAspectRatio="none"><path fill="rgba(37,99,235,0.08)" d="M0,224L48,213.3C96,203,192,181,288,186.7C384,192,480,224,576,234.7C672,245,768,235,864,208C960,181,1056,139,1152,133.3C1248,128,1344,160,1392,176L1440,192L1440,320L0,320Z"/></svg> <svg class="wave-2" viewBox="0 0 1440 320" preserveAspectRatio="none"><path fill="rgba(6,182,212,0.06)" d="M0,288L48,272C96,256,192,224,288,213.3C384,203,480,213,576,229.3C672,245,768,267,864,261.3C960,256,1056,224,1152,208C1248,192,1344,192,1392,192L1440,192L1440,320L0,320Z"/></svg> <svg class="wave-3" viewBox="0 0 1440 320" preserveAspectRatio="none"><path fill="rgba(37,99,235,0.04)" d="M0,256L48,261.3C96,267,192,277,288,272C384,267,480,245,576,224C672,203,768,181,864,192C960,203,1056,245,1152,256C1248,267,1344,245,1392,234.7L1440,224L1440,320L0,320Z"/></svg></div><div class="landing-orb orb-1"></div><div class="landing-orb orb-2"></div><main class="container" style="max-width:640px;position:relative;z-index:2"><div class="page-section"><div class="wl-card"><h3><span class="about-emoji">&#x1F468;&#x200D;&#x1F4BB;</span> Creator</h3><p><strong>WaveLite</strong> was created by <strong>Chandan Maurya</strong> in Bengaluru, India, in 2025. Driven by the lack of truly private messaging solutions that don't rely on centralized servers, Chandan set out to build a peer-to-peer communication tool where privacy, simplicity, and user freedom come first.</p><p style="margin-top:10px">What began as a personal challenge quickly turned into a full-fledged app that empowers users to chat, share files, and even use AI &mdash; all without compromising their data.</p></div></div><div class="page-section"><div class="wl-card"><h3><span class="about-emoji">&#x1F310;</span> About WaveLite</h3><p>WaveLite Chat is a modern, secure, peer-to-peer chat app built on <strong>WebRTC</strong>. It allows users to communicate and share media directly without going through a central server.</p></div></div><div class="page-section"><div class="wl-card"><h3><span class="about-emoji">&#x2728;</span> Features</h3><ul><li><i class="fas fa-shield-halved"></i> End-to-End Secure & Serverless Communication</li><li><i class="fas fa-image"></i> Send images, videos, audio, documents</li><li><i class="fas fa-location-dot"></i> Share live location with a map preview</li><li><i class="fas fa-microphone"></i> Record voice and video from browser</li><li><i class="fas fa-robot"></i> Chat with integrated Gemini AI Assistant</li><li><i class="fas fa-palette"></i> Light/Dark Theme and Mobile-Friendly UI</li></ul></div></div><div class="page-section"><div class="wl-card"><h3><span class="about-emoji">&#x2699;&#xFE0F;</span> How It Works</h3><p>WaveLite uses WebRTC to establish a peer-to-peer connection. The app exchanges offer/answer SDP using Cloudflare Pages Functions and connects two browsers directly. No account, no login, just fast, private chat.</p></div></div><div class="page-section"><div class="wl-card"><h3><span class="about-emoji">&#x1F6E1;&#xFE0F;</span> Security & Benefits</h3><ul><li><i class="fas fa-server"></i> No central server: nothing is stored</li><li><i class="fas fa-lock"></i> Messages and files travel only between users</li><li><i class="fas fa-bolt"></i> Zero configuration: works instantly</li><li><i class="fas fa-book-open"></i> Open-source and customizable</li><li><i class="fas fa-user-secret"></i> Anonymous usage possible</li></ul></div></div></main></div><script>var sections=document.querySelectorAll(".page-section"),observer=new IntersectionObserver(function(e){e.forEach(function(e){e.isIntersecting&&e.target.classList.add("visible")})},{threshold:.15});sections.forEach(function(e){observer.observe(e)})</script></body></html>
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About - WaveLite Chat</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .about-emoji { font-size: 1.3rem; }
+  </style>
+</head>
+
+<body>
+  <header class="header scrolled">
+    <div class="page-nav">
+      <i class="fa-solid fa-angle-left back-icon" onclick="window.location.href='index.html'"></i>
+      <span><i class="fa-solid fa-circle-info"></i>About</span>
+    </div>
+  </header>
+
+  <div class="page-shell">
+    <div class="wave-bg">
+      <svg class="wave-1" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <path fill="rgba(37,99,235,0.08)" d="M0,224L48,213.3C96,203,192,181,288,186.7C384,192,480,224,576,234.7C672,245,768,235,864,208C960,181,1056,139,1152,133.3C1248,128,1344,160,1392,176L1440,192L1440,320L0,320Z"/>
+      </svg>
+      <svg class="wave-2" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <path fill="rgba(6,182,212,0.06)" d="M0,288L48,272C96,256,192,224,288,213.3C384,203,480,213,576,229.3C672,245,768,267,864,261.3C960,256,1056,224,1152,208C1248,192,1344,192,1392,192L1440,192L1440,320L0,320Z"/>
+      </svg>
+      <svg class="wave-3" viewBox="0 0 1440 320" preserveAspectRatio="none">
+        <path fill="rgba(37,99,235,0.04)" d="M0,256L48,261.3C96,267,192,277,288,272C384,267,480,245,576,224C672,203,768,181,864,192C960,203,1056,245,1152,256C1248,267,1344,245,1392,234.7L1440,224L1440,320L0,320Z"/>
+      </svg>
+    </div>
+    <div class="landing-orb orb-1"></div>
+    <div class="landing-orb orb-2"></div>
+
+    <main class="container" style="max-width:640px; position:relative; z-index:2;">
+      <div class="page-section">
+        <div class="wl-card">
+          <h3><span class="about-emoji">&#x1F468;&#x200D;&#x1F4BB;</span> Creator</h3>
+          <p><strong>WaveLite</strong> was created by <strong>Chandan Maurya</strong> in Bengaluru, India, in 2025.
+            Driven by the lack of truly private messaging solutions that don't rely on centralized servers, Chandan set
+            out to build a peer-to-peer communication tool where privacy, simplicity, and user freedom come first.</p>
+          <p style="margin-top:10px;">What began as a personal challenge quickly turned into a full-fledged app that
+            empowers users to chat, share files, and even use AI &mdash; all without compromising their data.</p>
+        </div>
+      </div>
+
+      <div class="page-section">
+        <div class="wl-card">
+          <h3><span class="about-emoji">&#x1F310;</span> About WaveLite</h3>
+          <p>WaveLite Chat is a modern, secure, peer-to-peer chat app built on <strong>WebRTC</strong>. It allows users
+            to communicate and share media directly without going through a central server.</p>
+        </div>
+      </div>
+
+      <div class="page-section">
+        <div class="wl-card">
+          <h3><span class="about-emoji">&#x2728;</span> Features</h3>
+          <ul>
+            <li><i class="fas fa-shield-halved"></i> End-to-End Secure & Serverless Communication</li>
+            <li><i class="fas fa-image"></i> Send images, videos, audio, documents</li>
+            <li><i class="fas fa-location-dot"></i> Share live location with a map preview</li>
+            <li><i class="fas fa-microphone"></i> Record voice and video from browser</li>
+            <li><i class="fas fa-robot"></i> Chat with integrated Gemini AI Assistant</li>
+            <li><i class="fas fa-palette"></i> Light/Dark Theme and Mobile-Friendly UI</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="page-section">
+        <div class="wl-card">
+          <h3><span class="about-emoji">&#x2699;&#xFE0F;</span> How It Works</h3>
+          <p>WaveLite uses WebRTC to establish a peer-to-peer connection. The app exchanges offer/answer SDP using
+            Cloudflare Pages Functions and connects two browsers directly. No account, no login, just fast, private
+            chat.</p>
+        </div>
+      </div>
+
+      <div class="page-section">
+        <div class="wl-card">
+          <h3><span class="about-emoji">&#x1F6E1;&#xFE0F;</span> Security & Benefits</h3>
+          <ul>
+            <li><i class="fas fa-server"></i> No central server: nothing is stored</li>
+            <li><i class="fas fa-lock"></i> Messages and files travel only between users</li>
+            <li><i class="fas fa-bolt"></i> Zero configuration: works instantly</li>
+            <li><i class="fas fa-book-open"></i> Open-source and customizable</li>
+            <li><i class="fas fa-user-secret"></i> Anonymous usage possible</li>
+          </ul>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    var sections = document.querySelectorAll('.page-section');
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    }, { threshold: 0.15 });
+    sections.forEach(function (section) {
+      observer.observe(section);
+    });
+  </script>
+</body>
+
+</html>

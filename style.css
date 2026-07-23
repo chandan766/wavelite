@@ -1877,6 +1877,189 @@ img { max-width: 100%; height: auto; }
 }
 
 /* ============================================
+   SECURE MODE VISUAL INDICATOR — Persistent badge
+   ============================================ */
+.secure-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: 8px;
+  padding: 2px 10px 2px 8px;
+  border-radius: 99px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  animation: secure-badge-in 0.35s var(--wl-ease-spring);
+  flex-shrink: 0;
+}
+
+.secure-indicator-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10B981;
+  animation: secure-dot-pulse 2.5s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.4);
+}
+
+.secure-indicator-text {
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #10B981;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+@keyframes secure-badge-in {
+  from { opacity: 0; transform: scale(0.85) translateX(-4px); }
+  to { opacity: 1; transform: scale(1) translateX(0); }
+}
+
+@keyframes secure-dot-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* ---- Header glow when secure mode is active ---- */
+body.secure-mode-active #appHeader {
+  box-shadow: 0 2px 24px rgba(16, 185, 129, 0.08), inset 0 -1px 0 rgba(16, 185, 129, 0.1);
+  transition: box-shadow 0.4s var(--wl-ease);
+}
+
+body.secure-mode-active .header.scrolled {
+  box-shadow: 0 2px 24px rgba(16, 185, 129, 0.10), 0 1px 0 var(--wl-border-subtle), inset 0 -1px 0 rgba(16, 185, 129, 0.08);
+}
+
+/* ---- Chat container subtle inner glow when secure mode is active ---- */
+body.secure-mode-active #chat-display {
+  box-shadow: inset 0 0 0 1.5px rgba(16, 185, 129, 0.10);
+  border-radius: var(--wl-r);
+  transition: box-shadow 0.4s var(--wl-ease);
+}
+
+/* ---- Secure toggle gets a glow ring when ON ---- */
+.secure-toggle-btn.secure-on {
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.2);
+}
+
+/* ---- Status indicator turns green when secure ---- */
+body.secure-mode-active #status {
+  color: #10B981;
+}
+
+/* ============================================
+   SECURE TOGGLE — Chat screen header
+   ============================================ */
+.header-actions-chat {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.secure-toggle-btn {
+  width: 32px; height: 32px;
+  border-radius: var(--wl-r-sm);
+  border: none;
+  background: transparent;
+  color: var(--wl-slate-400);
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s var(--wl-ease);
+}
+
+.secure-toggle-btn:hover {
+  background: var(--wl-blue-pale);
+  color: var(--wl-blue);
+}
+
+.secure-toggle-btn.secure-on {
+  color: var(--wl-success);
+}
+
+.secure-toggle-btn.secure-on:hover {
+  background: rgba(16, 185, 129, 0.1);
+  color: var(--wl-success);
+}
+
+.secure-toggle-switch {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.secure-toggle-track {
+  width: 36px; height: 20px;
+  border-radius: 10px;
+  background: var(--wl-slate-300);
+  position: relative;
+  transition: background 0.25s var(--wl-ease);
+}
+
+.secure-toggle-track.secure-on {
+  background: var(--wl-success);
+}
+
+.secure-toggle-thumb {
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: white;
+  position: absolute;
+  top: 2px; left: 2px;
+  transition: transform 0.25s var(--wl-ease);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.secure-toggle-track.secure-on .secure-toggle-thumb {
+  transform: translateX(16px);
+}
+
+.secure-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--wl-slate-400);
+  min-width: 26px;
+  letter-spacing: 0.02em;
+}
+
+.secure-label.secure-on {
+  color: var(--wl-success);
+}
+
+.secure-encryption-hint {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  font-size: 0.68rem;
+  color: var(--wl-success);
+  background: var(--wl-surface-elevated);
+  border: 1px solid var(--wl-border-subtle);
+  border-radius: var(--wl-r-sm);
+  padding: 4px 10px;
+  white-space: nowrap;
+  box-shadow: var(--wl-shadow-sm);
+  z-index: 1100;
+  animation: fade-in 0.3s var(--wl-ease);
+}
+
+/* ============================================
+   VERSION BADGE
+   ============================================ */
+.version-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--wl-blue);
+  background: var(--wl-blue-bg);
+  padding: 2px 8px;
+  border-radius: var(--wl-r-full);
+  margin-left: 6px;
+  vertical-align: middle;
+  letter-spacing: 0.01em;
+}
+
+/* ============================================
    UTILITY
    ============================================ */
 .d-none { display: none !important; }
