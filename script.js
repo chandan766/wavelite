@@ -332,11 +332,12 @@ $(document).ready(() => {
   }, 3000);
 
   /* ---- Secure Toggle ---- */
-  $(document).on("click", "#secureToggleSwitch, #secureToggleBtn, #secureToggleTrack", function () {
+  function toggleSecure() {
     const newState = !secureEnabled;
     setSecureState(newState, !1);
     sendSecureState(newState);
-  });
+  }
+  $("#secureToggleBtn, #secureToggleSwitch").on("click", toggleSecure);
 
   /* ---- Override reload to reset navbar ---- */
   const origReloadClick = $("#reloadBtn").off("click");
@@ -1938,6 +1939,7 @@ function setSecureState(enabled, fromSync) {
   const $icon = $("#secureToggleIcon");
   const $label = $("#secureLabel");
   const $btn = $("#secureToggleBtn");
+  const $switch = $("#secureToggleSwitch");
   const $hint = $("#secureHint");
   const $body = $("body");
   const $indicator = $("#secureIndicator");
@@ -1945,6 +1947,7 @@ function setSecureState(enabled, fromSync) {
   if (enabled) {
     $track.addClass("secure-on");
     $btn.addClass("secure-on");
+    $switch.addClass("secure-on");
     $label.addClass("secure-on").text("ON");
     $icon.removeClass("fa-lock").addClass("fa-lock-open");
     $hint.removeClass("d-none");
@@ -1967,6 +1970,7 @@ function setSecureState(enabled, fromSync) {
   } else {
     $track.removeClass("secure-on");
     $btn.removeClass("secure-on");
+    $switch.removeClass("secure-on");
     $label.removeClass("secure-on").text("OFF");
     $icon.removeClass("fa-lock-open").addClass("fa-lock");
     $hint.addClass("d-none");
