@@ -944,15 +944,21 @@ function setupDataChannel() {
         const sender = msg.sender || msg.name || "Peer";
         (async () => {
           let displayText = msg.message;
+          let encryptedMeta = null;
+
           if (msg.encrypted && msg.meta) {
-            const decoded = await callDecode(msg.meta.dictionary, msg.meta.shift, msg.message);
-            if (decoded !== null) {
-              displayText = decoded;
+            if (secureEnabled) {
+              const decoded = await callDecode(msg.meta.dictionary, msg.meta.shift, msg.message);
+              if (decoded !== null) {
+                displayText = decoded;
+              } else {
+                displayText = "[Decryption failed — message cannot be displayed]";
+              }
             } else {
-              displayText = "[Decryption failed — message cannot be displayed]";
+              encryptedMeta = msg.meta;
             }
           }
-          displayMessage(sender, displayText, !1, "text", null, msg.messageId, "delivered");
+          displayMessage(sender, displayText, !1, "text", null, msg.messageId, "delivered", null, null, encryptedMeta);
         })();
       } else if (msg.type === "secure_state") {
         setSecureState(msg.enabled, !0);
@@ -1508,7 +1514,7 @@ function transitionToChat() {
   }
 }
 
-function displayMessage(name, content, isSelf, type, file, messageId, status, fileType = null, fileSize = null) {
+function displayMessage(name, content, isSelf, type, file, messageId, status, fileType = null, fileSize = null, encryptedMeta = null) {
   const alignClass = isSelf ? "self" : "other";
   const statusIcon = isSelf
     ? `<span class="status-icon  ms-2" style="color: var(--wl-neon);"><i class="fas fa-check-double"></i></span>`
@@ -1623,7 +1629,11 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
 
   try {
     var existing = document.querySelector('[data-message-id="' + messageId + '"]');
-    var newBubble = $('<div class="chat-message ' + alignClass + ' px-3" data-message-id="' + messageId + '">' +
+    var encryptedAttrs = '';
+    if (encryptedMeta) {
+      encryptedAttrs = ' data-encrypted="true" data-dictionary="' + encryptedMeta.dictionary + '" data-shift="' + encryptedMeta.shift + '"';
+    }
+    var newBubble = $('<div class="chat-message ' + alignClass + ' px-3" data-message-id="' + messageId + '"' + encryptedAttrs + '>' +
       '<div class="message py-1" style="font-size:12px;font-weight:450;">' + messageContent + '</div>' +
       '<div class="message-meta d-flex justify-content-end border-top border-secondary mt-2">' +
       '<span class="timestamp text-end" style="font-size:10px;">' +
@@ -1941,6 +1951,22 @@ function setSecureState(enabled, fromSync) {
     $hint.removeClass("d-none");
     $body.addClass("secure-mode-active");
     $indicator.removeClass("d-none");
+
+    document.querySelectorAll('[data-encrypted="true"]').forEach(function (el) {
+      var dict = parseInt(el.getAttribute("data-dictionary"), 10);
+      var shift = parseInt(el.getAttribute("data-shift"), 10);
+      var msgEl = el.querySelector(".message");
+      if (!msgEl) return;
+      var rawText = msgEl.textContent;
+      callDecode(dict, shift, rawText).then(function (decoded) {
+        if (decoded !== null) {
+          msgEl.innerHTML = formatTextMsg(decoded);
+        }
+        el.removeAttribute("data-encrypted");
+        el.removeAttribute("data-dictionary");
+        el.removeAttribute("data-shift");
+      });
+    });
   } else {
     $track.removeClass("secure-on");
     $btn.removeClass("secure-on");
