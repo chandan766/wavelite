@@ -18,6 +18,7 @@
     .dev-warning { font-size: 0.78rem; color: var(--wl-danger); background: var(--wl-danger-bg); padding: 10px 14px; border-radius: var(--wl-r-sm); margin-top: 16px; display: flex; align-items: center; gap: 8px; }
     .dev-warning i { font-size: 0.85rem; }
     hr.dev-hr { border-color: var(--wl-border-subtle); margin: 16px 0; }
+    .dev-section-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--wl-slate-400); font-weight: 700; margin-bottom: 12px; }
   </style>
 </head>
 <body>
@@ -73,8 +74,8 @@
 
           <div class="dev-toggle-row">
             <div class="dev-toggle-info">
-              <h4>Enable Secure Button State Sync</h4>
-              <p>When OFF, incoming secure_state messages are ignored. The Secure button works only from local interaction.</p>
+              <h4>Disable Secure Button State Sync</h4>
+              <p>When ON, incoming secure_state messages are ignored. The Secure button works only from local interaction.</p>
             </div>
             <div class="dev-toggle-control">
               <div class="secure-toggle-switch" id="secureSyncToggle">
@@ -85,9 +86,9 @@
             </div>
           </div>
 
-          <div class="dev-warning" id="secureSyncWarning">
+          <div class="dev-warning" id="secureSyncWarning" style="display:none;">
             <i class="fas fa-info-circle"></i>
-            <span>When Secure Sync is ON, a subtle theme shift is applied as a visual indicator.</span>
+            <span>Secure Sync is disabled. Incoming secure_state messages will be ignored.</span>
           </div>
         </div>
       </div>
@@ -95,6 +96,19 @@
       <div class="page-section visible">
         <div class="wl-card dev-card" id="stunCard">
           <h3><i class="fas fa-server"></i>STUN Servers</h3>
+          <div class="dev-toggle-row" style="margin-bottom:12px;">
+            <div class="dev-toggle-info">
+              <h4>Use STUN Servers</h4>
+              <p>Include configured STUN servers in ICE configuration.</p>
+            </div>
+            <div class="dev-toggle-control">
+              <div class="secure-toggle-switch" id="stunEnabledToggle">
+                <div class="secure-toggle-track" id="stunEnabledTrack">
+                  <div class="secure-toggle-thumb" id="stunEnabledThumb"></div>
+                </div>
+              </div>
+            </div>
+          </div>
           <p style="font-size:0.85rem;color:var(--wl-text-secondary);margin-bottom:12px;">
             Select STUN servers for WebRTC connectivity. At least one must be selected.
             <span class="text-success" id="stunSaveStatus" style="font-size:0.72rem;margin-left:4px;"></span>
@@ -132,6 +146,43 @@
           <div id="stun-error" class="mt-2 text-danger small d-none">Please select at least 1 STUN server.</div>
         </div>
       </div>
+
+      <div class="page-section visible">
+        <div class="wl-card dev-card" id="turnCard">
+          <h3><i class="fas fa-exchange-alt"></i>TURN Server (Relay)</h3>
+          <div class="dev-toggle-row" style="margin-bottom:12px;">
+            <div class="dev-toggle-info">
+              <h4>Use TURN Servers</h4>
+              <p>Include configured TURN server in ICE configuration.</p>
+            </div>
+            <div class="dev-toggle-control">
+              <div class="secure-toggle-switch" id="turnEnabledToggle">
+                <div class="secure-toggle-track" id="turnEnabledTrack">
+                  <div class="secure-toggle-thumb" id="turnEnabledThumb"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-2">
+            <label class="form-label" style="font-size:0.82rem;">TURN URL</label>
+            <input type="text" id="turnServerUrl" class="form-control form-control-sm" placeholder="turn:your-turn-server.com:3478" style="font-size:0.82rem;">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" style="font-size:0.82rem;">Username <span class="text-muted" style="font-weight:400;">(optional)</span></label>
+            <input type="text" id="turnServerUser" class="form-control form-control-sm" placeholder="username" style="font-size:0.82rem;">
+          </div>
+          <div class="mb-2">
+            <label class="form-label" style="font-size:0.82rem;">Password <span class="text-muted" style="font-weight:400;">(optional)</span></label>
+            <input type="password" id="turnServerPass" class="form-control form-control-sm" placeholder="password" style="font-size:0.82rem;">
+          </div>
+          <div class="mt-2">
+            <button class="btn btn-ghost btn-sm" id="clearTurnBtn" style="font-size:0.75rem;">
+              <i class="fas fa-undo me-1"></i>Reset to Default
+            </button>
+            <span id="turnSaveStatus" class="text-success ms-2" style="font-size:0.72rem;"></span>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -146,38 +197,62 @@
 
       var devBadge = document.getElementById("devModeBadge");
       var devTrack = document.getElementById("devModeTrack");
-      var devThumb = document.getElementById("devModeThumb");
       var syncTrack = document.getElementById("secureSyncTrack");
-      var syncThumb = document.getElementById("secureSyncThumb");
       var syncWarning = document.getElementById("secureSyncWarning");
+      var stunEnabledTrack = document.getElementById("stunEnabledTrack");
+      var turnEnabledTrack = document.getElementById("turnEnabledTrack");
+
+      /* ---- Toggle UI helpers ---- */
+      function setToggleState(trackEl, on) {
+        if (on) trackEl.classList.add("secure-on");
+        else trackEl.classList.remove("secure-on");
+      }
 
       function updateDevToggle(state) {
-        if (state) {
-          devTrack.classList.add("secure-on");
-          if (devBadge) devBadge.textContent = "ON";
-        } else {
-          devTrack.classList.remove("secure-on");
-          if (devBadge) devBadge.textContent = "OFF";
-        }
+        setToggleState(devTrack, state);
+        if (devBadge) devBadge.textContent = state ? "ON" : "OFF";
       }
 
-      function updateSyncToggle(state) {
-        if (state) {
-          syncTrack.classList.add("secure-on");
-          if (syncWarning) syncWarning.style.display = "flex";
-        } else {
-          syncTrack.classList.remove("secure-on");
-          if (syncWarning) syncWarning.style.display = "none";
-        }
+      function updateSyncToggle(disabled) {
+        setToggleState(syncTrack, disabled);
+        if (syncWarning) syncWarning.style.display = disabled ? "flex" : "none";
       }
 
+      function updateStunEnabledToggle(enabled) {
+        setToggleState(stunEnabledTrack, enabled);
+      }
+
+      function updateTurnEnabledToggle(enabled) {
+        setToggleState(turnEnabledTrack, enabled);
+      }
+
+      /* ---- Developer Mode ---- */
       var currentDev = devEnabled;
       updateDevToggle(currentDev);
 
-      var currentSync = localStorage.getItem("wl_secureSync") !== "false";
-      updateSyncToggle(currentSync);
+      document.getElementById("devModeToggle").addEventListener("click", function () {
+        currentDev = !currentDev;
+        localStorage.setItem("wl_devMode", currentDev ? "true" : "false");
+        updateDevToggle(currentDev);
+        if (typeof window.opener !== "undefined" && window.opener && !window.opener.closed) {
+          try { window.opener.postMessage({ type: "wl_devModeChanged", enabled: currentDev }, "*"); } catch (e) {}
+        }
+      });
 
-      /* ---- STUN Server Configuration ---- */
+      /* ---- Secure Sync (inverted: toggle ON = sync disabled) ---- */
+      var currentSyncDisabled = localStorage.getItem("wl_secureSync") === "false";
+      updateSyncToggle(currentSyncDisabled);
+
+      document.getElementById("secureSyncToggle").addEventListener("click", function () {
+        currentSyncDisabled = !currentSyncDisabled;
+        localStorage.setItem("wl_secureSync", currentSyncDisabled ? "false" : "true");
+        updateSyncToggle(currentSyncDisabled);
+        if (typeof window.opener !== "undefined" && window.opener && !window.opener.closed) {
+          try { window.opener.postMessage({ type: "wl_secureSyncChanged", enabled: !currentSyncDisabled }, "*"); } catch (e) {}
+        }
+      });
+
+      /* ---- STUN Servers ---- */
       function loadStunSettings() {
         var defaultStuns = ["stun:global.stun.twilio.com:3478"];
         var savedStuns = JSON.parse(localStorage.getItem("selectedStunServers") || "[]");
@@ -204,26 +279,65 @@
             }
           }
         });
-      }
+      });
 
       loadStunSettings();
 
-      document.getElementById("devModeToggle").addEventListener("click", function () {
-        currentDev = !currentDev;
-        localStorage.setItem("wl_devMode", currentDev ? "true" : "false");
-        updateDevToggle(currentDev);
-        if (typeof window.opener !== "undefined" && window.opener && !window.opener.closed) {
-          try { window.opener.postMessage({ type: "wl_devModeChanged", enabled: currentDev }, "*"); } catch (e) {}
-        }
+      /* ---- Use STUN Servers toggle ---- */
+      var currentStunEnabled = localStorage.getItem("wl_stunEnabled") !== "false";
+      updateStunEnabledToggle(currentStunEnabled);
+
+      document.getElementById("stunEnabledToggle").addEventListener("click", function () {
+        currentStunEnabled = !currentStunEnabled;
+        localStorage.setItem("wl_stunEnabled", currentStunEnabled ? "true" : "false");
+        updateStunEnabledToggle(currentStunEnabled);
       });
 
-      document.getElementById("secureSyncToggle").addEventListener("click", function () {
-        currentSync = !currentSync;
-        localStorage.setItem("wl_secureSync", currentSync ? "true" : "false");
-        updateSyncToggle(currentSync);
-        if (typeof window.opener !== "undefined" && window.opener && !window.opener.closed) {
-          try { window.opener.postMessage({ type: "wl_secureSyncChanged", enabled: currentSync }, "*"); } catch (e) {}
+      /* ---- TURN Server ---- */
+      function loadTurnSettings() {
+        document.getElementById("turnServerUrl").value = localStorage.getItem("turnServerUrl") || "";
+        document.getElementById("turnServerUser").value = localStorage.getItem("turnServerUser") || "";
+        document.getElementById("turnServerPass").value = localStorage.getItem("turnServerPass") || "";
+      }
+
+      function saveTurnSettings() {
+        var url = document.getElementById("turnServerUrl").value.trim();
+        var user = document.getElementById("turnServerUser").value.trim();
+        var pass = document.getElementById("turnServerPass").value.trim();
+        if (url) localStorage.setItem("turnServerUrl", url);
+        else localStorage.removeItem("turnServerUrl");
+        if (user) localStorage.setItem("turnServerUser", user);
+        else localStorage.removeItem("turnServerUser");
+        if (pass) localStorage.setItem("turnServerPass", pass);
+        else localStorage.removeItem("turnServerPass");
+        var statusEl = document.getElementById("turnSaveStatus");
+        if (statusEl) {
+          statusEl.textContent = "Saved!";
+          setTimeout(function () { statusEl.textContent = ""; }, 3000);
         }
+      }
+
+      loadTurnSettings();
+
+      document.getElementById("turnServerUrl").addEventListener("change", saveTurnSettings);
+      document.getElementById("turnServerUser").addEventListener("change", saveTurnSettings);
+      document.getElementById("turnServerPass").addEventListener("change", saveTurnSettings);
+
+      document.getElementById("clearTurnBtn").addEventListener("click", function () {
+        document.getElementById("turnServerUrl").value = "turn:relay.backups.cz:3478";
+        document.getElementById("turnServerUser").value = "";
+        document.getElementById("turnServerPass").value = "";
+        saveTurnSettings();
+      });
+
+      /* ---- Use TURN Servers toggle ---- */
+      var currentTurnEnabled = localStorage.getItem("wl_turnEnabled") !== "false";
+      updateTurnEnabledToggle(currentTurnEnabled);
+
+      document.getElementById("turnEnabledToggle").addEventListener("click", function () {
+        currentTurnEnabled = !currentTurnEnabled;
+        localStorage.setItem("wl_turnEnabled", currentTurnEnabled ? "true" : "false");
+        updateTurnEnabledToggle(currentTurnEnabled);
       });
     })();
   </script>

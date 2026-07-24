@@ -240,7 +240,6 @@ $(document).ready(() => {
 
     localStorage.setItem("peerIds", peerIdInput);
     localStorage.setItem("peerName", peerNameInput);
-    saveTurnSettings();
     showAlert(`Peer ID "${peerIdInput}" saved for notifications.`, !1);
     const permission = await Notification.requestPermission();
 
@@ -261,16 +260,7 @@ $(document).ready(() => {
       $("#peerNameToSave").val(savedPeersName);
     }
 
-    loadTurnSettings();
     loadApiKey();
-  });
-
-  $("#turnServerUrl, #turnServerUser, #turnServerPass").on("change blur", saveTurnSettings);
-  $("#clearTurnBtn").click(function () {
-    $("#turnServerUrl").val("turn:relay.backups.cz:3478");
-    $("#turnServerUser").val("");
-    $("#turnServerPass").val("");
-    saveTurnSettings();
   });
 
   let hasPrompted = !1;
@@ -561,21 +551,32 @@ async function setupAnswerer(offerEntry) {
 }
 
 function createPeerConnection() {
-  const savedStuns = JSON.parse(localStorage.getItem("selectedStunServers") || "[]");
-  const stunServers = savedStuns.length >= 1 ? savedStuns : ["stun:global.stun.twilio.com:3478"];
-  const savedTurnUrl = localStorage.getItem("turnServerUrl") || "turn:relay.backups.cz:3478";
-  const savedTurnUser = localStorage.getItem("turnServerUser") || "";
-  const savedTurnPass = localStorage.getItem("turnServerPass") || "";
+  const stunEnabled = localStorage.getItem("wl_stunEnabled") !== "false";
+  const turnEnabled = localStorage.getItem("wl_turnEnabled") !== "false";
+  const iceServers = [];
 
-  const iceServers = stunServers.map((url) => ({ urls: url }));
+  if (stunEnabled) {
+    const savedStuns = JSON.parse(localStorage.getItem("selectedStunServers") || "[]");
+    const stunServers = savedStuns.length >= 1 ? savedStuns : ["stun:global.stun.twilio.com:3478"];
+    stunServers.forEach(function (url) { iceServers.push({ urls: url }); });
+  }
 
-  if (savedTurnUrl) {
-    const turnConfig = { urls: savedTurnUrl };
-    if (savedTurnUser && savedTurnPass) {
-      turnConfig.username = savedTurnUser;
-      turnConfig.credential = savedTurnPass;
+  if (turnEnabled) {
+    const savedTurnUrl = localStorage.getItem("turnServerUrl") || "";
+    if (savedTurnUrl) {
+      const turnConfig = { urls: savedTurnUrl };
+      const savedTurnUser = localStorage.getItem("turnServerUser") || "";
+      const savedTurnPass = localStorage.getItem("turnServerPass") || "";
+      if (savedTurnUser && savedTurnPass) {
+        turnConfig.username = savedTurnUser;
+        turnConfig.credential = savedTurnPass;
+      }
+      iceServers.push(turnConfig);
     }
-    iceServers.push(turnConfig);
+  }
+
+  if (iceServers.length === 0) {
+    iceServers.push({ urls: "stun:global.stun.twilio.com:3478" });
   }
 
   const pc = new RTCPeerConnection({
@@ -1727,28 +1728,6 @@ async function startJoinConnection(peerId) {
   }, 3000);
 
   console.log(`⏰ Started polling for offers (timeout: ${CONNECTION_TIMEOUT / 1000}s, interval: 3s)`);
-}
-
-function loadTurnSettings() {
-  const savedUrl = localStorage.getItem("turnServerUrl") || "";
-  const savedUser = localStorage.getItem("turnServerUser") || "";
-  const savedPass = localStorage.getItem("turnServerPass") || "";
-  $("#turnServerUrl").val(savedUrl);
-  $("#turnServerUser").val(savedUser);
-  $("#turnServerPass").val(savedPass);
-}
-
-function saveTurnSettings() {
-  const url = $("#turnServerUrl").val().trim();
-  const user = $("#turnServerUser").val().trim();
-  const pass = $("#turnServerPass").val().trim();
-  if (url) localStorage.setItem("turnServerUrl", url);
-  else localStorage.removeItem("turnServerUrl");
-  if (user) localStorage.setItem("turnServerUser", user);
-  else localStorage.removeItem("turnServerUser");
-  if (pass) localStorage.setItem("turnServerPass", pass);
-  else localStorage.removeItem("turnServerPass");
-  $("#turnSaveStatus").text("Saved!").fadeOut(2000, function () { $(this).text("").show(); });
 }
 
 function updateConnectionStatus(message, percent, isFinal = !1) {
