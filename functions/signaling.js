@@ -99,7 +99,7 @@ async function handlePostRequest(request, env) {
     return createErrorResponse('Missing required field: type');
   }
 
-  // peerId is required for offer/answer/cleanup, not for encode/decode
+  // peerId is required for offer/answer/cleanup, not for encode/decode/metadata
   if ((type === 'offer' || type === 'answer' || type === 'cleanup') && !peerId) {
     console.log('❌ Missing required field: peerId');
     return createErrorResponse('Missing required field: peerId');
@@ -408,29 +408,70 @@ async function handleCleanup(peerId, env, cleanupType = null) {
   }
 }
 
-// Handle encode request
+// ============================================================
+// Metadata encoding for dictionary & shift
+// ------------------------------------------------------------
+// Encodes dictionary (1-10) and shift (1-30) into a short
+// opaque string that hides the raw values in transit.
+// Independent from Encode_Text / Decode_Text.
+// ============================================================
+
+const META_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+const META_BASE = 62;
+const META_WIDTH = 4;
+
+function encodeMetadata(dictionary, shift) {
+  var val = (dictionary - 1) * 30 + (shift - 1);
+  var digits = [];
+  for (var i = 0; i < META_WIDTH; i++) {
+    digits.unshift(META_CHARS[val % META_BASE]);
+    val = Math.floor(val / META_BASE);
+  }
+  return digits.join('');
+}
+
+function decodeMetadata(encoded) {
+  var val = 0;
+  for (var i = 0; i < encoded.length; i++) {
+    val = val * META_BASE + META_CHARS.indexOf(encoded[i]);
+  }
+  return {
+    dictionary: Math.floor(val / 30) + 1,
+    shift: (val % 30) + 1
+  };
+}
+
+// Handle encode request — returns combined metadata-cipherText
 function handleEncode(body) {
   try {
     const { dictionary, shift, message } = body;
     if (!dictionary || !shift || message === undefined) {
       return createErrorResponse('Missing required fields: dictionary, shift, message');
     }
-    const encoded = Encode_Text(dictionary, shift, message);
-    return createSuccessResponse({ encoded });
+    var metadata = encodeMetadata(dictionary, shift);
+    var cipherText = Encode_Text(dictionary, shift, message);
+    return createSuccessResponse({ encoded: metadata + '-' + cipherText });
   } catch (error) {
     return createErrorResponse('Encode failed', 500, error.message);
   }
 }
 
-// Handle decode request
+// Handle decode request — accepts combined metadata-cipherText
 function handleDecode(body) {
   try {
-    const { dictionary, shift, message } = body;
-    if (!dictionary || !shift || message === undefined) {
-      return createErrorResponse('Missing required fields: dictionary, shift, message');
+    var combined = body.message;
+    if (!combined) {
+      return createErrorResponse('Missing required field: message');
     }
-    const decoded = Decode_Text(dictionary, shift, message);
-    return createSuccessResponse({ decoded });
+    var parts = combined.split('-');
+    if (parts.length < 2) {
+      return createErrorResponse('Invalid message format');
+    }
+    var metadata = parts[0];
+    var cipherText = parts.slice(1).join('-');
+    var result = decodeMetadata(metadata);
+    var decoded = Decode_Text(result.dictionary, result.shift, cipherText);
+    return createSuccessResponse({ decoded: decoded });
   } catch (error) {
     return createErrorResponse('Decode failed', 500, error.message);
   }

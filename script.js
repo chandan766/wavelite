@@ -136,18 +136,17 @@ $(document).ready(() => {
       if (secureEnabled) {
         const dictionary = Math.floor(Math.random() * 10) + 1;
         const shift = Math.floor(Math.random() * 30) + 1;
-        const encoded = await callEncode(dictionary, shift, rawMessage);
-        if (!encoded) {
+        const encrypted = await callEncode(dictionary, shift, rawMessage);
+        if (!encrypted) {
           showAlert("Encryption failed — check console for details. Message not sent.");
           return;
         }
         payload = JSON.stringify({
           type: "text",
-          message: encoded,
+          message: encrypted,
           encrypted: !0,
           messageId,
-          sender: name,
-          meta: { dictionary, shift }
+          sender: name
         });
       } else {
         payload = JSON.stringify({
@@ -709,12 +708,12 @@ async function callEncode(dictionary, shift, message) {
   }
 }
 
-async function callDecode(dictionary, shift, message) {
+async function callDecode(message) {
   try {
     const res = await fetch(ENCODE_DECODE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'decode', dictionary, shift, message })
+      body: JSON.stringify({ type: 'decode', message })
     });
     const data = await res.json();
     if (data.decoded !== undefined) return data.decoded;
@@ -946,16 +945,16 @@ function setupDataChannel() {
           let displayText = msg.message;
           let encryptedMeta = null;
 
-          if (msg.encrypted && msg.meta) {
+          if (msg.encrypted) {
             if (secureEnabled) {
-              const decoded = await callDecode(msg.meta.dictionary, msg.meta.shift, msg.message);
+              var decoded = await callDecode(msg.message);
               if (decoded !== null) {
                 displayText = decoded;
               } else {
                 displayText = "[Decryption failed — message cannot be displayed]";
               }
             } else {
-              encryptedMeta = msg.meta;
+              encryptedMeta = msg.messageId;
             }
           }
           displayMessage(sender, displayText, !1, "text", null, msg.messageId, "delivered", null, null, encryptedMeta);
@@ -1631,7 +1630,7 @@ function displayMessage(name, content, isSelf, type, file, messageId, status, fi
     var existing = document.querySelector('[data-message-id="' + messageId + '"]');
     var encryptedAttrs = '';
     if (encryptedMeta) {
-      encryptedAttrs = ' data-encrypted="true" data-dictionary="' + encryptedMeta.dictionary + '" data-shift="' + encryptedMeta.shift + '"';
+      encryptedAttrs = ' data-encrypted="true" data-msg-id="' + encryptedMeta + '"';
     }
     var newBubble = $('<div class="chat-message ' + alignClass + ' px-3" data-message-id="' + messageId + '"' + encryptedAttrs + '>' +
       '<div class="message py-1" style="font-size:12px;font-weight:450;">' + messageContent + '</div>' +
@@ -1953,19 +1952,17 @@ function setSecureState(enabled, fromSync) {
     $indicator.removeClass("d-none");
 
     document.querySelectorAll('[data-encrypted="true"]').forEach(function (el) {
-      var dict = parseInt(el.getAttribute("data-dictionary"), 10);
-      var shift = parseInt(el.getAttribute("data-shift"), 10);
       var msgEl = el.querySelector(".message");
       if (!msgEl) return;
       var rawText = msgEl.textContent;
-      callDecode(dict, shift, rawText).then(function (decoded) {
+      (async () => {
+        var decoded = await callDecode(rawText);
         if (decoded !== null) {
           msgEl.innerHTML = formatTextMsg(decoded);
         }
         el.removeAttribute("data-encrypted");
-        el.removeAttribute("data-dictionary");
-        el.removeAttribute("data-shift");
-      });
+        el.removeAttribute("data-msg-id");
+      })();
     });
   } else {
     $track.removeClass("secure-on");
