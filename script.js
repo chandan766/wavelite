@@ -138,7 +138,7 @@ $(document).ready(() => {
         const shift = Math.floor(Math.random() * 30) + 1;
         const encoded = await callEncode(dictionary, shift, rawMessage);
         if (!encoded) {
-          showAlert("Encryption failed. Message not sent.");
+          showAlert("Encryption failed — check console for details. Message not sent.");
           return;
         }
         payload = JSON.stringify({
@@ -701,9 +701,10 @@ async function callEncode(dictionary, shift, message) {
     });
     const data = await res.json();
     if (data.encoded !== undefined) return data.encoded;
+    console.error('Encode failed:', res.status, data.error, data.details || '');
     throw new Error(data.error || 'Encode failed');
   } catch (e) {
-    console.error('Encode error:', e);
+    console.error('Encode error:', e.message);
     return null;
   }
 }
@@ -717,9 +718,10 @@ async function callDecode(dictionary, shift, message) {
     });
     const data = await res.json();
     if (data.decoded !== undefined) return data.decoded;
+    console.error('Decode failed:', res.status, data.error, data.details || '');
     throw new Error(data.error || 'Decode failed');
   } catch (e) {
-    console.error('Decode error:', e);
+    console.error('Decode error:', e.message);
     return null;
   }
 }

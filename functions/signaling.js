@@ -98,7 +98,9 @@ async function handlePostRequest(request, env) {
     console.log('❌ Missing required field: type');
     return createErrorResponse('Missing required field: type');
   }
-  if (!peerId) {
+
+  // peerId is required for offer/answer/cleanup, not for encode/decode
+  if ((type === 'offer' || type === 'answer' || type === 'cleanup') && !peerId) {
     console.log('❌ Missing required field: peerId');
     return createErrorResponse('Missing required field: peerId');
   }
