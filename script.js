@@ -40,6 +40,7 @@ const receiverTransferIndexMap = new Map();
 let pendingSendBatch = [];
 let ackSafetyTimeouts = new Map();
 let currentReceivingMessageId = null;
+let cancelledTransfers = new Set();
 
 $(document).ready(() => {
   let savedProfilePeerId = localStorage.getItem("peerIds") || "";
@@ -260,6 +261,11 @@ $(document).ready(() => {
     }
 
     loadApiKey();
+  });
+
+  $(document).on("click", ".cancel-upload-btn", function () {
+    var messageId = $(this).data("mid");
+    if (messageId) cancelFileTransfer(messageId);
   });
 
   let hasPrompted = !1;
@@ -1020,9 +1026,14 @@ function setupDataChannel() {
         }
         console.log(`Received file metadata for ${msg.fileName}`);
       } else if (msg.type === "resend_request") {
+        if (cancelledTransfers.has(msg.messageId)) return;
         console.log(`🔁 Resend request for ${msg.messageId} [${msg.majorIndex}-${msg.chunkIndex}]`);
         resendFileChunk(msg.messageId, msg.majorIndex, msg.chunkIndex);
       } else if (msg.type === "file_ack") {
+        if (cancelledTransfers.has(msg.messageId)) {
+          cancelledTransfers.delete(msg.messageId);
+          return;
+        }
         console.log(`✅ Received file_ack for messageId: ${msg.messageId}`);
         if (ackSafetyTimeouts.has(msg.messageId)) {
           clearTimeout(ackSafetyTimeouts.get(msg.messageId));
@@ -1036,6 +1047,49 @@ function setupDataChannel() {
         retryCounts.delete(msg.messageId);
         isSendingFile = !1;
         processNextFileInQueue();
+      } else if (msg.type === "file_cancel") {
+        console.log("Received file_cancel for messageId:", msg.messageId);
+        var rTransfer = receivedTransfers.get(msg.messageId);
+        var mcTransfer = mediaReceivingChunks[msg.messageId];
+        if (!rTransfer && !mcTransfer) return;
+        if (rTransfer) {
+          clearTimeout(rTransfer.timeoutId);
+          receivedTransfers.delete(msg.messageId);
+          retryCounts.delete(msg.messageId);
+          if (rTransfer.transferIndex) receiverTransferIndexMap.delete(rTransfer.transferIndex);
+        }
+        if (mcTransfer) {
+          if (mcTransfer.resendIntervalId) clearInterval(mcTransfer.resendIntervalId);
+          delete mediaReceivingChunks[msg.messageId];
+          if (mcTransfer.transferIndex) receiverTransferIndexMap.delete(mcTransfer.transferIndex);
+        }
+        hideProgressBar(msg.messageId);
+        var target = document.querySelector('[data-message-id="' + msg.messageId + '"]');
+        if (target) {
+          target.removeAttribute("data-status");
+          var ov = target.querySelector(".upload-overlay");
+          if (ov) { ov.remove(); target.classList.remove("file-uploading"); }
+          var statusEl = target.querySelector(".file-status");
+          if (statusEl) {
+            statusEl.innerHTML = '<i class="fas fa-exclamation-triangle text-danger me-1"></i> Cancelled';
+            statusEl.style.color = "#dc3545";
+          }
+          var downloadBtn = target.querySelector('a[download]');
+          if (downloadBtn) {
+            downloadBtn.removeAttribute("href");
+            downloadBtn.classList.add("disabled", "text-muted");
+            downloadBtn.innerHTML = '<i class="fas fa-ban me-2"></i>Cancelled';
+          }
+        }
+        if (currentReceivingMessageId === msg.messageId) {
+          currentReceivingMessageId = null;
+          var nextWaiting = document.querySelector('[data-status="waiting"]');
+          if (nextWaiting) {
+            var nextMid = nextWaiting.getAttribute("data-message-id");
+            nextWaiting.setAttribute("data-status", "receiving");
+            showProgressBar(nextMid, false);
+          }
+        }
       } else if (msg.type === "username") {
         console.log("Received peer username:", msg.name);
         $("#headerBtnName").text(msg.name).addClass("text-capitalize");
@@ -1064,6 +1118,7 @@ function setupDataChannel() {
     pendingSendBatch = [];
     ackSafetyTimeouts.forEach(function(t) { clearTimeout(t); });
     ackSafetyTimeouts.clear();
+    cancelledTransfers.clear();
     isSendingFile = !1;
     currentReceivingMessageId = null;
   };
@@ -1210,8 +1265,14 @@ function sendFileChunks(messageId) {
     let currentChunk = 0;
 
     const sendChunk = () => {
+      if (!activeTransfers.get(messageId) || activeTransfers.get(messageId)?.cancelled) {
+        return;
+      }
+
       if (currentChunk >= totalChunks) {
         console.log("✅ File sending complete (single channel) for messageId:", messageId);
+        var cb = document.querySelector('#progress-' + messageId + ' .cancel-upload-btn');
+        if (cb) cb.remove();
         updateProgressBar(messageId, 99);
         var progressEl = document.querySelector('#progress-' + messageId + ' .progress-percentage');
         if (progressEl) progressEl.textContent = 'Finalizing...';
@@ -1312,6 +1373,10 @@ function sendFileChunks(messageId) {
     const sendNext = () => {
       if (subIndex >= partChunks.length) return;
 
+      if (!activeTransfers.get(messageId) || activeTransfers.get(messageId)?.cancelled) {
+        return;
+      }
+
       const channel = mediaChannels[majorIndex];
 
       if (!channel || channel.readyState !== "open") {
@@ -1373,8 +1438,14 @@ function sendFileChunks(messageId) {
   });
 
   const checkComplete = setInterval(() => {
+    if (!activeTransfers.get(messageId) || activeTransfers.get(messageId)?.cancelled) {
+      clearInterval(checkComplete);
+      return;
+    }
     if (totalSentChunks >= totalSubChunks) {
       clearInterval(checkComplete);
+      var cb = document.querySelector('#progress-' + messageId + ' .cancel-upload-btn');
+      if (cb) cb.remove();
       console.log("✅ File sending complete for messageId:", messageId);
       updateProgressBar(messageId, 99);
       var progressEl = document.querySelector('#progress-' + messageId + ' .progress-percentage');
@@ -1390,6 +1461,43 @@ function sendFileChunks(messageId) {
       }, ACK_TIMEOUT));
     }
   }, 300);
+}
+
+function updateProgressBarCancelled(messageId) {
+  var el = document.getElementById("progress-" + messageId);
+  if (!el) return;
+  var bar = el.querySelector(".progress-bar");
+  if (bar) {
+    bar.className = "progress-bar bg-danger";
+    bar.style.width = "100%";
+    bar.style.fontSize = "16px";
+    bar.style.lineHeight = "30px";
+    var span = bar.querySelector("span");
+    if (span) span.innerHTML = '<i class="fas fa-times-circle me-2"></i>Cancelled';
+  }
+  var cancelBtn = el.querySelector(".cancel-upload-btn");
+  if (cancelBtn) cancelBtn.remove();
+}
+
+function cancelFileTransfer(messageId) {
+  var transfer = activeTransfers.get(messageId);
+  if (!transfer) return;
+  transfer.cancelled = true;
+  activeTransfers.delete(messageId);
+  retryCounts.delete(messageId);
+  cancelledTransfers.add(messageId);
+  if (ackSafetyTimeouts.has(messageId)) {
+    clearTimeout(ackSafetyTimeouts.get(messageId));
+    ackSafetyTimeouts.delete(messageId);
+  }
+  updateProgressBarCancelled(messageId);
+  try {
+    dataChannel.send(JSON.stringify({ type: "file_cancel", messageId: messageId }));
+  } catch (e) {
+    console.warn("Could not send cancel notification:", e.message);
+  }
+  isSendingFile = false;
+  processNextFileInQueue();
 }
 
 function resendFileChunk(messageId, majorIndex, chunkIndex) {
@@ -1450,12 +1558,17 @@ function showProgressBar(messageId, isSender) {
     fileName = receivedTransfers.get(messageId).fileInfo.fileName;
   }
 
+  var cancelBtnHtml = isSender ? '<button class="btn btn-sm btn-link text-danger p-0 border-0 cancel-upload-btn" data-mid="' + messageId + '" title="Cancel upload" style="font-size:16px;line-height:1;text-decoration:none;"><i class="fas fa-times-circle"></i></button>' : '';
+
   $("#chat-display").append(`
     <div class="chat-message ${alignClass} px-3" id="progress-${messageId}">
-      <div class="file-name mt-2" style="font-size: 14px; font-weight: 500;">${truncateName(
-        fileName,
-        25
-      )}</div>
+      <div class="d-flex justify-content-between align-items-center mt-2">
+        <div class="file-name" style="font-size: 14px; font-weight: 500;">${truncateName(
+          fileName,
+          25
+        )}</div>
+        ${cancelBtnHtml}
+      </div>
       <div class="progress mt-2" style="height: 30px;">
         <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" 
              role="progressbar" 
@@ -1924,11 +2037,13 @@ function processNextFileInQueue() {
 function updateNavbarForChat() {
   $("#headerActionsHome").addClass("d-none");
   $("#headerActionsChat").removeClass("d-none");
+  $("#settingBtn, #headerActionsHome > .dropdown").addClass("d-none");
 }
 
 function updateNavbarForHome() {
   $("#headerActionsHome").removeClass("d-none");
   $("#headerActionsChat").addClass("d-none");
+  $("#settingBtn, #headerActionsHome > .dropdown").removeClass("d-none");
 }
 
 function setSecureState(enabled, fromSync) {
